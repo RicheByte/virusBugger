@@ -1,0 +1,16 @@
+# Malware Analysis Tool - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+pefile>=2023.2.7        # PE file parsing and analysis
+yara-python>=4.3.1      # YARA rule scanning
+requests>=2.31.0        # HTTP client for Cuckoo integration
+
+# Optional but recommended
+python-magic>=0.4.27    # Better file type detection (requires libmagic)
+ssdeep>=3.4             # Fuzzy hashing for similarity analysis
+
+# Development dependencies (optional)
+pytest>=7.4.0           # Unit testing framework
+black>=23.7.0           # Code formatter
+pylint>=2.17.5          # Code linter
