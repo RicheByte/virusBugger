@@ -9,6 +9,7 @@ requests>=2.31.0        # HTTP client for Cuckoo integration
 # Optional but recommended
 python-magic>=0.4.27    # Better file type detection (requires libmagic)
 ssdeep>=3.4             # Fuzzy hashing for similarity analysis
+tlsh>=4.5.0             # TLSH fuzzy hashing (optional)
 
 # Development dependencies (optional)
 pytest>=7.4.0           # Unit testing framework

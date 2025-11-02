@@ -23,6 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
 import ipaddress
+from typing import List, Dict
 
 # Optional imports with graceful fallback
 try:
@@ -42,6 +43,25 @@ try:
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
+
+# Optional extras
+try:
+    import ssdeep
+    HAS_SSDEEP = True
+except Exception:
+    HAS_SSDEEP = False
+
+try:
+    import tlsh
+    HAS_TLSH = True
+except Exception:
+    HAS_TLSH = False
+
+try:
+    import magic  # python-magic
+    HAS_MAGIC = True
+except Exception:
+    HAS_MAGIC = False
 
 
 # ============================================================================
@@ -271,6 +291,8 @@ def compute_hashes(file_path):
     md5 = hashlib.md5()
     sha1 = hashlib.sha1()
     sha256 = hashlib.sha256()
+    fzy = None
+    tls = None
     
     try:
         with open(file_path, 'rb') as f:
@@ -281,11 +303,32 @@ def compute_hashes(file_path):
     except Exception as e:
         return {"error": str(e)}
     
-    return {
+    # Compute fuzzy hashes if available
+    try:
+        if HAS_SSDEEP:
+            with open(file_path, 'rb') as f:
+                fzy = ssdeep.hash(f.read())
+    except Exception:
+        fzy = None
+    try:
+        if HAS_TLSH:
+            with open(file_path, 'rb') as f:
+                data = f.read()
+                h = tlsh.hash(data)
+                tls = h if h not in (None, '') else None
+    except Exception:
+        tls = None
+
+    result = {
         'md5': md5.hexdigest(),
         'sha1': sha1.hexdigest(),
         'sha256': sha256.hexdigest()
     }
+    if fzy:
+        result['ssdeep'] = fzy
+    if tls:
+        result['tlsh'] = tls
+    return result
 
 
 # ============================================================================
@@ -294,6 +337,15 @@ def compute_hashes(file_path):
 
 def detect_file_type(file_path):
     """Detect file type using magic bytes"""
+    # Prefer python-magic if available
+    if HAS_MAGIC:
+        try:
+            desc = magic.from_file(file_path)
+            if isinstance(desc, bytes):
+                desc = desc.decode('utf-8', errors='ignore')
+            return desc
+        except Exception:
+            pass
     signatures = {
         b'MZ': 'PE/DOS Executable',
         b'\x7fELF': 'ELF Executable',
@@ -478,6 +530,9 @@ def analyze_pe_file(file_path):
         'dll_characteristics': pe.OPTIONAL_HEADER.DllCharacteristics,
         'entry_point': hex(pe.OPTIONAL_HEADER.AddressOfEntryPoint),
         'image_base': hex(pe.OPTIONAL_HEADER.ImageBase),
+        'imphash': None,
+        'is_signed': False,
+        'overlay_size': 0,
         'sections': [],
         'imports': [],
         'exports': [],
@@ -489,30 +544,49 @@ def analyze_pe_file(file_path):
     try:
         timestamp = pe.FILE_HEADER.TimeDateStamp
         if timestamp > 0 and timestamp < 0xFFFFFFFF:
-            result['timestamp'] = datetime.fromtimestamp(timestamp).isoformat()
+            dt = datetime.fromtimestamp(timestamp)
+            result['timestamp'] = dt.isoformat()
+            # Heuristic: implausible years
+            if dt.year < 2000 or dt.year > 2035:
+                result['suspicious_flags'].append(f"Implausible compile time: {dt.isoformat()}")
         else:
             result['suspicious_flags'].append(f"Invalid PE timestamp: {timestamp}")
     except Exception as e:
         logger.warning(f"Could not parse PE timestamp: {e}")
         result['timestamp'] = 'Invalid'
+
+    # imphash
+    try:
+        result['imphash'] = pe.get_imphash()
+    except Exception:
+        result['imphash'] = None
     
     # Sections
     for section in pe.sections:
+        name = section.Name.decode('utf-8', errors='ignore').strip('\x00')
+        chars = section.Characteristics
+        entropy = section.get_entropy()
         result['sections'].append({
-            'name': section.Name.decode('utf-8', errors='ignore').strip('\x00'),
+            'name': name,
             'virtual_address': hex(section.VirtualAddress),
             'virtual_size': section.Misc_VirtualSize,
             'raw_size': section.SizeOfRawData,
-            'entropy': section.get_entropy(),
-            'characteristics': section.Characteristics
+            'entropy': entropy,
+            'characteristics': chars
         })
         
         # Check for suspicious entropy (packed/encrypted)
-        if section.get_entropy() > 7.0:
+        if entropy > 7.0:
             result['suspicious_flags'].append(
-                f"High entropy in section {section.Name.decode('utf-8', errors='ignore').strip('\x00')}: "
-                f"{section.get_entropy():.2f}"
+                f"High entropy in section {name}: "
+                f"{entropy:.2f}"
             )
+        # .text writable or executable anomalies
+        IMAGE_SCN_MEM_WRITE = 0x80000000
+        IMAGE_SCN_CNT_CODE = 0x00000020
+        if name.lower().startswith('.text'):
+            if chars & IMAGE_SCN_MEM_WRITE:
+                result['suspicious_flags'].append(".text section is writable")
     
     # Imports
     if hasattr(pe, 'DIRECTORY_ENTRY_IMPORT'):
@@ -522,6 +596,9 @@ def analyze_pe_file(file_path):
             for imp in entry.imports:
                 if imp.name:
                     imports.append(imp.name.decode('utf-8', errors='ignore'))
+                else:
+                    # imported by ordinal
+                    result['suspicious_flags'].append(f"Import by ordinal in {dll_name}")
             result['imports'].append({
                 'dll': dll_name,
                 'functions': imports[:50]  # Limit to 50 per DLL
@@ -550,6 +627,27 @@ def analyze_pe_file(file_path):
                                 'lang': resource_lang.id,
                                 'size': resource_lang.data.struct.Size
                             })
+
+    # Check for overlay (appended data after PE image)
+    try:
+        overlay_offset = pe.get_overlay_data_start_offset()
+        if overlay_offset is not None:
+            file_size = os.path.getsize(file_path)
+            overlay_size = max(0, file_size - overlay_offset)
+            result['overlay_size'] = overlay_size
+            if overlay_size > 0:
+                result['suspicious_flags'].append(f"Overlay data present: {overlay_size} bytes")
+    except Exception:
+        pass
+
+    # Check for Authenticode signature presence (not validation)
+    try:
+        sec_dir_index = pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_SECURITY']
+        sec_dir = pe.OPTIONAL_HEADER.DATA_DIRECTORY[sec_dir_index]
+        if sec_dir and sec_dir.Size > 0:
+            result['is_signed'] = True
+    except Exception:
+        result['is_signed'] = False
     
     # Check for suspicious imports
     suspicious_imports = [
@@ -621,7 +719,24 @@ def run_yara_scan(file_path, rules_path=None):
         return run_default_yara_rules(file_path)
     
     try:
-        rules = yara.compile(filepath=rules_path)
+        # Allow directory of rules or comma-separated files
+        rule_files: Dict[str, str] = {}
+        if os.path.isdir(rules_path):
+            for root, _dirs, files in os.walk(rules_path):
+                for fn in files:
+                    if fn.lower().endswith(('.yar', '.yara')):
+                        ns = os.path.splitext(fn)[0]
+                        rule_files[ns] = os.path.join(root, fn)
+        else:
+            paths: List[str] = [p.strip() for p in rules_path.split(',') if p.strip()]
+            if len(paths) == 1:
+                rules = yara.compile(filepath=paths[0])
+            else:
+                for p in paths:
+                    ns = os.path.splitext(os.path.basename(p))[0]
+                    rule_files[ns] = p
+        if rule_files:
+            rules = yara.compile(filepaths=rule_files)
         matches = rules.match(file_path)
         
         results = []
@@ -1566,7 +1681,17 @@ def generate_report(sample_data, analysis_results, output_dir="reports"):
         f.write(f"| SHA1 | `{sample_data['sha1']}` |\n")
         f.write(f"| SHA256 | `{sample_data['sha256']}` |\n")
         f.write(f"| File Type | {sample_data.get('file_type', 'unknown')} |\n")
-        f.write(f"| Risk Score | **{analysis_results.get('risk_score', 0)}/100** |\n\n")
+        f.write(f"| Risk Score | **{analysis_results.get('risk_score', 0)}/100** |\n")
+        if sample_data.get('ssdeep') or sample_data.get('tlsh'):
+            if sample_data.get('ssdeep'):
+                f.write(f"| SSDEEP | `{sample_data['ssdeep']}` |\n")
+            if sample_data.get('tlsh'):
+                f.write(f"| TLSH | `{sample_data['tlsh']}` |\n")
+        if analysis_results.get('pe_analysis'):
+            pe = analysis_results['pe_analysis']
+            if pe.get('imphash'):
+                f.write(f"| imphash | `{pe['imphash']}` |\n")
+            f.write("\n")
         
         # YARA matches
         if 'yara' in analysis_results and isinstance(analysis_results['yara'], list) and analysis_results['yara']:
@@ -1578,6 +1703,15 @@ def generate_report(sample_data, analysis_results, output_dir="reports"):
                     f.write(f"**Description:** {match['meta'].get('description', 'N/A')}\n\n")
                 if match.get('strings'):
                     f.write(f"**Matched Strings:** {len(match['strings'])}\n\n")
+                    # Show a few examples with offsets
+                    f.write("Top strings:\n\n")
+                    shown = 0
+                    for ident, off, s in match['strings']:
+                        f.write(f"- {ident} @ 0x{off:X}: `{s[:80]}`\n")
+                        shown += 1
+                        if shown >= 5:
+                            break
+                    f.write("\n")
         
         # IOCs
         if 'iocs' in analysis_results:
@@ -1863,7 +1997,7 @@ NETWORK WARNING:
     )
     
     parser.add_argument('file', help='File to analyze')
-    parser.add_argument('--yara', '-y', help='Path to YARA rules file')
+    parser.add_argument('--yara', '-y', help='Path to YARA rules file, a directory of .yar files, or a comma-separated list')
     parser.add_argument('--cuckoo', '-c', help='Cuckoo sandbox URL (e.g., http://127.0.0.1:8090)')
     parser.add_argument('--no-db', action='store_true', help='Do not save to database')
     parser.add_argument('--output', '-o', default='reports', help='Output directory for reports')
