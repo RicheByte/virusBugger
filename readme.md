@@ -2,7 +2,7 @@
 
 A comprehensive, self-contained malware analysis tool for static and dynamic analysis **without relying on external APIs**. Built for defensive security operations, incident response, and malware research.
 
-## ⚠️ CRITICAL SAFETY WARNING
+##  CRITICAL SAFETY WARNING
 
 **Only analyze malware in isolated, air-gapped environments!**
 
@@ -16,24 +16,24 @@ A comprehensive, self-contained malware analysis tool for static and dynamic ana
 ## Features
 
 ### Static Analysis
-✅ **Hash Computation** - MD5, SHA1, SHA256 for correlation  
-✅ **File Type Detection** - Magic byte-based identification  
-✅ **String Extraction** - Memory-efficient streaming (handles multi-GB files)  
-✅ **IOC Extraction** - URLs, IPs, domains, emails, registry keys, file paths  
-✅ **PE Analysis** - Sections, imports, exports, entropy, suspicious patterns  
-✅ **YARA Scanning** - Embedded rules + custom ruleset support  
+ **Hash Computation** - MD5, SHA1, SHA256 for correlation  
+ **File Type Detection** - Magic byte-based identification  
+ **String Extraction** - Memory-efficient streaming (handles multi-GB files)  
+ **IOC Extraction** - URLs, IPs, domains, emails, registry keys, file paths  
+ **PE Analysis** - Sections, imports, exports, entropy, suspicious patterns  
+ **YARA Scanning** - Embedded rules + custom ruleset support  
 
 ### Dynamic Analysis (Optional)
-✅ **Cuckoo Integration** - Local sandbox submission and IOC extraction  
-✅ **Network IOCs** - DNS, HTTP, TCP/UDP connections  
-✅ **Behavioral IOCs** - Processes, mutexes, dropped files, registry changes  
+ **Cuckoo Integration** - Local sandbox submission and IOC extraction  
+ **Network IOCs** - DNS, HTTP, TCP/UDP connections  
+ **Behavioral IOCs** - Processes, mutexes, dropped files, registry changes  
 
 ### Intelligence & Reporting
-✅ **Risk Scoring** - Weighted algorithm (0-100 scale)  
-✅ **Markdown Reports** - Human-readable analysis summaries  
-✅ **JSON Export** - Machine-readable for SIEM/automation  
-✅ **SQLite Database** - Historical analysis, IOC correlation  
-✅ **No External APIs** - Completely local/offline operation  
+ **Risk Scoring** - Weighted algorithm (0-100 scale)  
+ **Markdown Reports** - Human-readable analysis summaries  
+ **JSON Export** - Machine-readable for SIEM/automation  
+ **SQLite Database** - Historical analysis, IOC correlation  
+ **No External APIs** - Completely local/offline operation  
 
 ---
 
@@ -361,14 +361,14 @@ python mal.py sample.exe  # Recreates DB
 
 This version includes critical production-ready improvements:
 
-✅ **Memory-efficient string extraction** - Streaming with chunk overlap (handles multi-GB files)  
-✅ **Safe SQLite operations** - WAL mode, proper UPSERT, context managers  
-✅ **YARA match sanitization** - Prevents DB bloat, safe encoding  
-✅ **Exponential backoff** - Cuckoo polling with timeout/error handling  
-✅ **IOC normalization** - Domain/IP validation, private IP filtering  
-✅ **Robust PE parsing** - Safe timestamp handling, entropy calculation  
-✅ **Logging infrastructure** - Structured logging with verbosity control  
-✅ **JSON export** - SIEM integration support  
+ **Memory-efficient string extraction** - Streaming with chunk overlap (handles multi-GB files)  
+ **Safe SQLite operations** - WAL mode, proper UPSERT, context managers  
+ **YARA match sanitization** - Prevents DB bloat, safe encoding  
+ **Exponential backoff** - Cuckoo polling with timeout/error handling  
+ **IOC normalization** - Domain/IP validation, private IP filtering  
+ **Robust PE parsing** - Safe timestamp handling, entropy calculation  
+ **Logging infrastructure** - Structured logging with verbosity control  
+ **JSON export** - SIEM integration support  
 
 See [IMPROVEMENTS.md](IMPROVEMENTS.md) for technical details.
 
