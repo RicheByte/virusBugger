@@ -626,12 +626,32 @@ def run_yara_scan(file_path, rules_path=None):
         
         results = []
         for match in matches:
+            matched_strings = []
+            for s in match.strings:
+                try:
+                    # s is a StringMatch object with attributes: identifier, instances
+                    identifier = s.identifier if hasattr(s, 'identifier') else str(s)
+                    # Get instances of the match
+                    instances = s.instances if hasattr(s, 'instances') else []
+                    for instance in instances[:5]:  # Limit to 5 instances per string
+                        offset = instance.offset if hasattr(instance, 'offset') else 0
+                        matched_data = instance.matched_data if hasattr(instance, 'matched_data') else b''
+                        # Safely decode the matched data
+                        if isinstance(matched_data, bytes):
+                            data_str = matched_data[:100].decode('utf-8', errors='ignore')
+                        else:
+                            data_str = str(matched_data)[:100]
+                        matched_strings.append((identifier, offset, data_str))
+                except Exception as e:
+                    logger.debug(f"Error processing YARA string match: {e}")
+                    continue
+            
             results.append({
                 'rule': match.rule,
                 'namespace': match.namespace,
                 'tags': match.tags,
                 'meta': match.meta,
-                'strings': [(s[0], s[1], s[2][:100]) for s in match.strings]  # Limit string length
+                'strings': matched_strings
             })
         
         return results
@@ -645,123 +665,645 @@ def run_default_yara_rules(file_path):
     if not HAS_YARA:
         return {"error": "yara-python not installed"}
     
-    # Embedded YARA rules
+    # Comprehensive YARA rules for malware analysis
     default_rules = """
-    rule Suspicious_URL_Strings {
+    // ==================== RAT (Remote Access Trojan) Detection ====================
+    
+    rule RAT_RevengeRAT {
         meta:
-            description = "Detects suspicious URL patterns"
-            severity = "medium"
+            description = "Detects RevengeRAT malware"
+            severity = "critical"
+            malware_family = "RevengeRAT"
         strings:
-            $url_http = "http://" nocase
-            $url_https = "https://" nocase
-            $exe = ".exe" ascii
-            $download = "download" nocase
+            $s1 = "RevengeRAT" nocase
+            $s2 = "Revenge-RAT" nocase
+            $s3 = "RV_MUTEX" nocase
+            $cmd1 = "NGRun" ascii
+            $cmd2 = "LimeLogger" ascii
+            $net1 = "socketio" nocase
+            $net2 = "get_Pass" ascii
         condition:
-            (($url_http or $url_https) and ($exe or $download))
+            any of ($s*) or 2 of ($cmd*, $net*)
     }
     
-    rule Suspicious_Registry {
+    rule RAT_njRAT {
         meta:
-            description = "Detects registry manipulation"
-            severity = "high"
+            description = "Detects njRAT/Bladabindi malware"
+            severity = "critical"
+            malware_family = "njRAT"
         strings:
-            $reg1 = "SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run" nocase
-            $reg2 = "RegSetValue" nocase
-            $reg3 = "RegCreateKey" nocase
+            $s1 = "njRAT" ascii
+            $s2 = "Bladabindi" ascii
+            $cmd1 = "inv" ascii
+            $cmd2 = "rn" ascii
+            $cmd3 = "CAP" ascii
+        condition:
+            any of ($s*) or 2 of ($cmd*)
+    }
+    
+    rule RAT_AsyncRAT {
+        meta:
+            description = "Detects AsyncRAT malware"
+            severity = "critical"
+            malware_family = "AsyncRAT"
+        strings:
+            $s1 = "AsyncRAT" ascii
+            $s2 = "AsyncClient" ascii
+            $s3 = "Async_RAT" ascii
+            $pdb = "AsyncRAT" ascii wide
+            $class = "ClientSocket" ascii wide
         condition:
             any of them
     }
     
-    rule Packer_Indicators {
+    rule RAT_QuasarRAT {
         meta:
-            description = "Common packer indicators"
-            severity = "medium"
+            description = "Detects QuasarRAT malware"
+            severity = "critical"
+            malware_family = "QuasarRAT"
         strings:
-            $upx1 = "UPX0" ascii
-            $upx2 = "UPX1" ascii
-            $aspack = ".aspack" ascii
-            $pecompact = "PECompact" ascii
+            $s1 = "Quasar.Client" ascii
+            $s2 = "Quasar.Common" ascii
+            $ns1 = "xServer.Forms" ascii
+            $ns2 = "xClient.Core" ascii
         condition:
             any of them
     }
     
-    rule Suspicious_Network {
+    // ==================== Ransomware Detection ====================
+    
+    rule Ransomware_Generic {
         meta:
-            description = "Network activity indicators"
-            severity = "high"
+            description = "Generic ransomware behavior indicators"
+            severity = "critical"
+            category = "Ransomware"
         strings:
-            $api1 = "InternetOpen" ascii
-            $api2 = "InternetReadFile" ascii
-            $api3 = "URLDownloadToFile" ascii
-            $api4 = "HttpSendRequest" ascii
+            $enc1 = "encrypt" nocase
+            $enc2 = "decrypt" nocase
+            $enc3 = "cipher" nocase
+            $pay1 = "bitcoin" nocase
+            $pay2 = "wallet" nocase
+            $pay3 = "ransom" nocase
+            $pay4 = "payment" nocase
+            $ext1 = ".locked" ascii
+            $ext2 = ".encrypted" ascii
+            $ext3 = ".crypt" ascii
+            $note1 = "README" nocase
+            $note2 = "HOW_TO_DECRYPT" nocase
+            $note3 = "RECOVERY" nocase
         condition:
-            2 of them
+            2 of ($enc*) and 2 of ($pay*) or
+            1 of ($enc*) and 1 of ($pay*) and 1 of ($ext*, $note*)
     }
     
-    rule Process_Injection {
+    rule Ransomware_WannaCry {
         meta:
-            description = "Process injection techniques"
+            description = "Detects WannaCry ransomware"
             severity = "critical"
+            malware_family = "WannaCry"
         strings:
-            $api1 = "VirtualAllocEx" ascii
-            $api2 = "WriteProcessMemory" ascii
-            $api3 = "CreateRemoteThread" ascii
-            $api4 = "NtUnmapViewOfSection" ascii
+            $s1 = "WNcry@2ol7" ascii
+            $s2 = "WANACRY!" ascii
+            $s3 = "msg/m_" ascii
+            $ext = ".WNCRY" ascii
+            $bitcoin = "115p7UMMngoj1pMvkpHijcRdfJNXj6LrLn" ascii
         condition:
-            2 of them
+            any of them
     }
     
-    rule Ransomware_Indicators {
+    rule Ransomware_Locky {
         meta:
-            description = "Potential ransomware behavior"
+            description = "Detects Locky ransomware"
             severity = "critical"
+            malware_family = "Locky"
         strings:
-            $s1 = "encrypt" nocase
-            $s2 = "bitcoin" nocase
-            $s3 = "decrypt" nocase
-            $s4 = ".locked" nocase
-            $s5 = "ransom" nocase
-            $s6 = "payment" nocase
+            $ext1 = ".locky" ascii
+            $ext2 = ".osiris" ascii
+            $ext3 = ".aesir" ascii
+            $ransom = "_Locky_recover_instructions.txt" ascii
+        condition:
+            any of them
+    }
+    
+    // ==================== Banking Trojans ====================
+    
+    rule BankingTrojan_Zeus {
+        meta:
+            description = "Detects Zeus banking trojan"
+            severity = "critical"
+            malware_family = "Zeus"
+        strings:
+            $s1 = "soft=1" ascii
+            $s2 = "user.php" ascii
+            $s3 = "gate.php" ascii
+            $s4 = "ZEUS" ascii
+            $conf = "CONFIGS" ascii
         condition:
             3 of them
     }
     
-    rule Keylogger_Indicators {
+    rule BankingTrojan_Emotet {
         meta:
-            description = "Keylogger behavior"
-            severity = "high"
-        strings:
-            $api1 = "GetAsyncKeyState" ascii
-            $api2 = "SetWindowsHookEx" ascii
-            $api3 = "GetForegroundWindow" ascii
-        condition:
-            2 of them
-    }
-    
-    rule Credential_Theft {
-        meta:
-            description = "Credential stealing indicators"
+            description = "Detects Emotet banking trojan"
             severity = "critical"
+            malware_family = "Emotet"
         strings:
-            $s1 = "password" nocase
-            $s2 = "credential" nocase
-            $s3 = "mimikatz" nocase
-            $s4 = "SAM" nocase
-            $api1 = "LsaEnumerateLogonSessions" ascii
+            $code1 = {8B 45 ?? 8B 4D ?? 8D 54 08 ?? 89 55 ??}
+            $code2 = {8B 45 ?? 33 C9 89 08 89 48 04}
+            $api1 = "CreateToolhelp32Snapshot" ascii
+            $api2 = "Process32First" ascii
+        condition:
+            all of ($code*) or all of ($api*)
+    }
+    
+    // ==================== Process Injection & Code Injection ====================
+    
+    rule Process_Injection_Classic {
+        meta:
+            description = "Classic process injection technique"
+            severity = "critical"
+            technique = "Process Injection"
+        strings:
+            $api1 = "OpenProcess" ascii
+            $api2 = "VirtualAllocEx" ascii
+            $api3 = "WriteProcessMemory" ascii
+            $api4 = "CreateRemoteThread" ascii
+            $api5 = "NtCreateThreadEx" ascii
+        condition:
+            all of ($api1, $api2, $api3) and any of ($api4, $api5)
+    }
+    
+    rule Process_Hollowing {
+        meta:
+            description = "Process hollowing technique"
+            severity = "critical"
+            technique = "Process Hollowing"
+        strings:
+            $api1 = "CreateProcess" ascii
+            $api2 = "NtUnmapViewOfSection" ascii
+            $api3 = "VirtualAllocEx" ascii
+            $api4 = "WriteProcessMemory" ascii
+            $api5 = "SetThreadContext" ascii
+            $api6 = "ResumeThread" ascii
+        condition:
+            4 of them
+    }
+    
+    rule APC_Injection {
+        meta:
+            description = "APC queue injection technique"
+            severity = "critical"
+            technique = "APC Injection"
+        strings:
+            $api1 = "OpenThread" ascii
+            $api2 = "QueueUserAPC" ascii
+            $api3 = "VirtualAllocEx" ascii
+            $api4 = "WriteProcessMemory" ascii
+        condition:
+            all of them
+    }
+    
+    rule Reflective_DLL_Injection {
+        meta:
+            description = "Reflective DLL injection"
+            severity = "critical"
+            technique = "Reflective DLL Injection"
+        strings:
+            $s1 = "ReflectiveLoader" ascii
+            $s2 = "GetProcAddress" ascii
+            $s3 = "LoadLibrary" ascii
+            $s4 = "VirtualAlloc" ascii
+        condition:
+            ($s1 and 2 of ($s2, $s3, $s4)) or all of ($s2, $s3, $s4)
+    }
+    
+    // ==================== Keyloggers ====================
+    
+    rule Keylogger_Hooks {
+        meta:
+            description = "Keyboard hook-based keylogger"
+            severity = "high"
+            category = "Keylogger"
+        strings:
+            $api1 = "SetWindowsHookEx" ascii
+            $api2 = "GetAsyncKeyState" ascii
+            $api3 = "GetForegroundWindow" ascii
+            $api4 = "GetWindowText" ascii
+            $const = {0D 00 00 00} // WH_KEYBOARD_LL = 13
+        condition:
+            ($api1 and $api2) or ($api1 and $api3 and $api4) or $const
+    }
+    
+    rule Keylogger_RawInput {
+        meta:
+            description = "Raw input keylogger"
+            severity = "high"
+            category = "Keylogger"
+        strings:
+            $api1 = "RegisterRawInputDevices" ascii
+            $api2 = "GetRawInputData" ascii
+            $api3 = "DefWindowProc" ascii
+        condition:
+            all of them
+    }
+    
+    // ==================== Credential Theft ====================
+    
+    rule Mimikatz {
+        meta:
+            description = "Detects Mimikatz credential dumping tool"
+            severity = "critical"
+            tool = "Mimikatz"
+        strings:
+            $s1 = "mimikatz" ascii nocase
+            $s2 = "sekurlsa" ascii
+            $s3 = "kerberos" ascii
+            $s4 = "gentilkiwi" ascii
+            $func1 = "LsaEnumerateLogonSessions" ascii
+            $func2 = "SamEnumerateUsersInDomain" ascii
+        condition:
+            2 of ($s*) or any of ($func*)
+    }
+    
+    rule Credential_Dumping_LSASS {
+        meta:
+            description = "LSASS memory credential dumping"
+            severity = "critical"
+            technique = "LSASS Dumping"
+        strings:
+            $proc = "lsass.exe" ascii nocase
+            $api1 = "MiniDumpWriteDump" ascii
+            $api2 = "CreateFileW" ascii
+            $api3 = "OpenProcess" ascii
+        condition:
+            ($proc and $api1) or all of ($api*)
+    }
+    
+    rule Browser_Password_Stealer {
+        meta:
+            description = "Browser password/cookie stealer"
+            severity = "high"
+            category = "Credential Theft"
+        strings:
+            $chrome1 = "Login Data" ascii wide
+            $chrome2 = "Cookies" ascii wide
+            $firefox = "Firefox" ascii wide
+            $edge = "Edge" ascii wide
+            $decrypt = "CryptUnprotectData" ascii
+        condition:
+            any of ($chrome*, $firefox, $edge) and $decrypt
+    }
+    
+    // ==================== Persistence Mechanisms ====================
+    
+    rule Persistence_Registry_Run {
+        meta:
+            description = "Registry Run key persistence"
+            severity = "high"
+            technique = "Registry Run Keys"
+        strings:
+            $reg1 = "CurrentVersion" ascii wide nocase
+            $api1 = "RegSetValueEx" ascii
+            $api2 = "RegCreateKeyEx" ascii
+        condition:
+            $reg1 and any of ($api*)
+    }
+    
+    rule Persistence_Scheduled_Task {
+        meta:
+            description = "Scheduled task persistence"
+            severity = "high"
+            technique = "Scheduled Task"
+        strings:
+            $cmd1 = "schtasks" ascii wide nocase
+            $cmd2 = "/create" ascii wide nocase
+            $api1 = "ITaskScheduler" ascii
+            $api2 = "ITaskService" ascii
+        condition:
+            ($cmd1 and $cmd2) or any of ($api*)
+    }
+    
+    rule Persistence_Startup_Folder {
+        meta:
+            description = "Startup folder persistence"
+            severity = "medium"
+            technique = "Startup Folder"
+        strings:
+            $path1 = "Startup" ascii wide nocase
+            $api = "SHGetFolderPath" ascii
+        condition:
+            $path1 and $api
+    }
+    
+    // ==================== Network Activity ====================
+    
+    rule Reverse_Shell {
+        meta:
+            description = "Reverse shell indicators"
+            severity = "critical"
+            category = "Backdoor"
+        strings:
+            $cmd1 = "cmd.exe" ascii wide nocase
+            $cmd2 = "/bin/sh" ascii
+            $cmd3 = "/bin/bash" ascii
+            $net1 = "WSAStartup" ascii
+            $net2 = "connect" ascii
+            $net3 = "recv" ascii
+            $pipe = "CreatePipe" ascii
+        condition:
+            any of ($cmd*) and 2 of ($net*) and $pipe
+    }
+    
+    rule C2_Beaconing {
+        meta:
+            description = "Command and control beaconing"
+            severity = "high"
+            category = "C2 Communication"
+        strings:
+            $http1 = "POST" ascii nocase
+            $http2 = "User-Agent:" ascii nocase
+            $http3 = "Content-Type:" ascii nocase
+            $enc1 = "base64" ascii nocase
+            $enc2 = "AES" ascii nocase
+            $enc3 = "RC4" ascii nocase
+        condition:
+            2 of ($http*) and any of ($enc*)
+    }
+    
+    rule Suspicious_Network_APIs {
+        meta:
+            description = "Suspicious network API usage"
+            severity = "high"
+            category = "Network Activity"
+        strings:
+            $api1 = "InternetOpen" ascii
+            $api2 = "InternetConnect" ascii
+            $api3 = "InternetOpenUrl" ascii
+            $api4 = "InternetReadFile" ascii
+            $api5 = "URLDownloadToFile" ascii
+            $api6 = "HttpSendRequest" ascii
+        condition:
+            3 of them
+    }
+    
+    // ==================== Packers & Obfuscation ====================
+    
+    rule UPX_Packer {
+        meta:
+            description = "UPX packer detected"
+            severity = "medium"
+            packer = "UPX"
+        strings:
+            $upx1 = "UPX0" ascii
+            $upx2 = "UPX1" ascii
+            $upx3 = "UPX!" ascii
+        condition:
+            any of them
+    }
+    
+    rule VMProtect_Packer {
+        meta:
+            description = "VMProtect packer detected"
+            severity = "medium"
+            packer = "VMProtect"
+        strings:
+            $s1 = ".vmp0" ascii
+            $s2 = ".vmp1" ascii
+            $s3 = "VMProtect" ascii
+        condition:
+            any of them
+    }
+    
+    rule Themida_Packer {
+        meta:
+            description = "Themida/Winlicense packer detected"
+            severity = "medium"
+            packer = "Themida"
+        strings:
+            $s1 = ".themida" ascii
+            $s2 = "Themida" ascii
+            $s3 = "WinLicense" ascii
+            $s4 = "Oreans" ascii
+        condition:
+            any of them
+    }
+    
+    rule High_Entropy_Section {
+        meta:
+            description = "High entropy section (possible encryption/packing)"
+            severity = "medium"
+            category = "Obfuscation"
+        condition:
+            // This is a placeholder - actual entropy checking done in PE analysis
+            false
+    }
+    
+    // ==================== Anti-Analysis Techniques ====================
+    
+    rule Anti_Debug_APIs {
+        meta:
+            description = "Anti-debugging API usage"
+            severity = "high"
+            technique = "Anti-Debugging"
+        strings:
+            $api1 = "IsDebuggerPresent" ascii
+            $api2 = "CheckRemoteDebuggerPresent" ascii
+            $api3 = "NtQueryInformationProcess" ascii
+            $api4 = "OutputDebugString" ascii
+            $api5 = "DebugActiveProcess" ascii
         condition:
             2 of them
     }
     
-    rule Anti_Analysis {
+    rule Anti_VM {
         meta:
-            description = "Anti-analysis techniques"
+            description = "Anti-VM detection techniques"
             severity = "high"
+            technique = "Anti-VM"
         strings:
-            $vm1 = "VMware" nocase
-            $vm2 = "VirtualBox" nocase
-            $vm3 = "QEMU" nocase
-            $dbg1 = "IsDebuggerPresent" ascii
-            $dbg2 = "CheckRemoteDebuggerPresent" ascii
+            $vm1 = "VMware" ascii nocase
+            $vm2 = "VirtualBox" ascii nocase
+            $vm3 = "VBOX" ascii nocase
+            $vm4 = "QEMU" ascii nocase
+            $vm5 = "Xen" ascii nocase
+            $reg1 = "HARDWARE" ascii nocase
+            $reg2 = "DEVICEMAP" ascii nocase
+        condition:
+            2 of ($vm*) or 2 of ($reg*)
+    }
+    
+    rule Anti_Sandbox {
+        meta:
+            description = "Anti-sandbox techniques"
+            severity = "high"
+            technique = "Anti-Sandbox"
+        strings:
+            $sleep1 = "Sleep" ascii
+            $sleep2 = "NtDelayExecution" ascii
+            $time1 = "GetTickCount" ascii
+            $time2 = "timeGetTime" ascii
+            $time3 = "QueryPerformanceCounter" ascii
+            $user1 = "GetCursorPos" ascii
+            $user2 = "GetLastInputInfo" ascii
+        condition:
+            (any of ($sleep*) and any of ($time*)) or any of ($user*)
+    }
+    
+    // ==================== Cryptominers ====================
+    
+    rule Cryptocurrency_Miner {
+        meta:
+            description = "Cryptocurrency miner detected"
+            severity = "high"
+            category = "Cryptominer"
+        strings:
+            $coin1 = "monero" ascii nocase
+            $coin2 = "xmrig" ascii nocase
+            $coin3 = "stratum+tcp" ascii nocase
+            $coin4 = "cryptonight" ascii nocase
+            $pool1 = "pool.minexmr" ascii nocase
+            $pool2 = "pool.supportxmr" ascii nocase
+        condition:
+            2 of ($coin*) or any of ($pool*)
+    }
+    
+    // ==================== Downloaders & Droppers ====================
+    
+    rule Downloader_Generic {
+        meta:
+            description = "Generic downloader behavior"
+            severity = "high"
+            category = "Downloader"
+        strings:
+            $api1 = "URLDownloadToFile" ascii
+            $api2 = "InternetReadFile" ascii
+            $api3 = "WinHttpReadData" ascii
+            $exec1 = "ShellExecute" ascii
+            $exec2 = "CreateProcess" ascii
+            $exec3 = "WinExec" ascii
+            $url1 = ".exe" ascii nocase
+            $url2 = ".dll" ascii nocase
+            $url3 = ".bat" ascii nocase
+        condition:
+            any of ($api*) and any of ($exec*) and any of ($url*)
+    }
+    
+    // ==================== Document Exploits ====================
+    
+    rule Suspicious_Office_Macros {
+        meta:
+            description = "Suspicious Office macro indicators"
+            severity = "high"
+            category = "Macro Malware"
+        strings:
+            $auto1 = "AutoOpen" ascii nocase
+            $auto2 = "AutoExec" ascii nocase
+            $auto3 = "Document_Open" ascii nocase
+            $auto4 = "Workbook_Open" ascii nocase
+            $cmd1 = "WScript.Shell" ascii nocase
+            $cmd2 = "Shell" ascii nocase
+            $cmd3 = "CreateObject" ascii nocase
+            $download = "MSXML2.XMLHTTP" ascii nocase
+        condition:
+            any of ($auto*) and (any of ($cmd*) or $download)
+    }
+    
+    rule PDF_Exploit {
+        meta:
+            description = "Suspicious PDF with potential exploit"
+            severity = "high"
+            category = "Exploit"
+        strings:
+            $pdf = "%PDF" ascii
+            $js1 = "/JavaScript" ascii
+            $js2 = "/JS" ascii
+            $aa = "/OpenAction" ascii
+            $embed = "/EmbeddedFile" ascii
+            $launch = "/Launch" ascii
+        condition:
+            $pdf and (($js1 or $js2) and ($aa or $embed or $launch))
+    }
+    
+    // ==================== Webshells ====================
+    
+    rule Webshell_Generic_PHP {
+        meta:
+            description = "Generic PHP webshell"
+            severity = "critical"
+            category = "Webshell"
+        strings:
+            $php = "<?php" ascii nocase
+            $exec1 = "eval(" ascii nocase
+            $exec2 = "system(" ascii nocase
+            $exec3 = "exec(" ascii nocase
+            $exec4 = "shell_exec(" ascii nocase
+            $exec5 = "passthru(" ascii nocase
+            $post = "$_POST" ascii nocase
+            $get = "$_GET" ascii nocase
+            $request = "$_REQUEST" ascii nocase
+        condition:
+            $php and 2 of ($exec*) and any of ($post, $get, $request)
+    }
+    
+    rule Webshell_Generic_ASPX {
+        meta:
+            description = "Generic ASPX webshell"
+            severity = "critical"
+            category = "Webshell"
+        strings:
+            $aspx1 = "<%@ Page" ascii nocase
+            $aspx2 = "runat=" ascii nocase
+            $exec1 = "Process.Start" ascii nocase
+            $exec2 = "cmd.exe" ascii nocase
+            $exec3 = "ProcessStartInfo" ascii nocase
+            $request = "Request.Form" ascii nocase
+        condition:
+            any of ($aspx*) and any of ($exec*) and $request
+    }
+    
+    // ==================== Suspicious Strings & Patterns ====================
+    
+    rule Suspicious_PowerShell {
+        meta:
+            description = "Suspicious PowerShell command patterns"
+            severity = "high"
+            category = "PowerShell"
+        strings:
+            $ps1 = "powershell" ascii nocase
+            $enc1 = "-encodedcommand" ascii nocase
+            $enc2 = "-enc" ascii nocase
+            $bypass1 = "-ExecutionPolicy Bypass" ascii nocase
+            $bypass2 = "-ep bypass" ascii nocase
+            $hidden = "-WindowStyle Hidden" ascii nocase
+            $download = "DownloadString" ascii nocase
+            $invoke = "IEX" ascii nocase
+        condition:
+            $ps1 and (any of ($enc*) or any of ($bypass*) or $hidden or ($download and $invoke))
+    }
+    
+    rule Suspicious_Base64 {
+        meta:
+            description = "Large base64 encoded data (possible payload)"
+            severity = "medium"
+            category = "Obfuscation"
+        strings:
+            $b64_1 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/" ascii
+            $b64_2 = "base64" ascii nocase
+        condition:
+            any of them
+    }
+    
+    rule Suspicious_URL_Patterns {
+        meta:
+            description = "Suspicious URL patterns"
+            severity = "medium"
+            category = "Network IOC"
+        strings:
+            $http = "http://" ascii nocase
+            $https = "https://" ascii nocase
+            $pastebin = "pastebin.com" ascii nocase
+            $discord = "discord.com/api/webhooks" ascii nocase
+            $telegram = "api.telegram.org" ascii nocase
         condition:
             any of them
     }
@@ -773,12 +1315,32 @@ def run_default_yara_rules(file_path):
         
         results = []
         for match in matches:
+            matched_strings = []
+            for s in match.strings:
+                try:
+                    # s is a StringMatch object with attributes: identifier, instances
+                    identifier = s.identifier if hasattr(s, 'identifier') else str(s)
+                    # Get instances of the match
+                    instances = s.instances if hasattr(s, 'instances') else []
+                    for instance in instances[:5]:  # Limit to 5 instances per string
+                        offset = instance.offset if hasattr(instance, 'offset') else 0
+                        matched_data = instance.matched_data if hasattr(instance, 'matched_data') else b''
+                        # Safely decode the matched data
+                        if isinstance(matched_data, bytes):
+                            data_str = matched_data[:100].decode('utf-8', errors='ignore')
+                        else:
+                            data_str = str(matched_data)[:100]
+                        matched_strings.append((identifier, offset, data_str))
+                except Exception as e:
+                    logger.debug(f"Error processing YARA string match: {e}")
+                    continue
+            
             results.append({
                 'rule': match.rule,
                 'namespace': match.namespace,
                 'tags': match.tags,
                 'meta': match.meta,
-                'strings': [(s[0], s[1], s[2][:100]) for s in match.strings]
+                'strings': matched_strings
             })
         
         return results

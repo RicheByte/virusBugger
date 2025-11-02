@@ -99,10 +99,12 @@ MALWARE ANALYSIS TRIAGE TOOL
       - Suspicious import: KERNEL32.dll!VirtualAllocEx
 
 [INFO] Step 5: Running YARA rules...
-    Matches: 3
-      - Process_Injection (severity: critical)
-      - Suspicious_Network (severity: high)
-      - Anti_Analysis (severity: high)
+    Matches: 5
+      - RAT_RevengeRAT (severity: critical)
+      - Process_Injection_Classic (severity: critical)
+      - Suspicious_Network_APIs (severity: high)
+      - Suspicious_Base64 (severity: medium)
+      - Suspicious_URL_Patterns (severity: medium)
 
 [INFO] Step 7: Calculating risk score...
     Risk Score: 85/100
@@ -264,17 +266,77 @@ ORDER BY detections DESC;
 
 ### Embedded Rules
 
-The tool includes 9 embedded YARA rules:
+The tool includes **40+ comprehensive YARA rules** covering major malware families and techniques:
 
-1. **Suspicious_URL_Strings** - HTTP/HTTPS + exe/download patterns
-2. **Suspicious_Registry** - Registry manipulation
-3. **Packer_Indicators** - UPX, ASPack, PECompact
-4. **Suspicious_Network** - Internet access APIs
-5. **Process_Injection** - Code injection techniques
-6. **Ransomware_Indicators** - Encryption, payment keywords
-7. **Keylogger_Indicators** - Keylogging APIs
-8. **Credential_Theft** - Password/credential references
-9. **Anti_Analysis** - VM/debugger detection
+#### RAT (Remote Access Trojans)
+- **RAT_RevengeRAT** - RevengeRAT malware detection
+- **RAT_njRAT** - njRAT/Bladabindi detection
+- **RAT_AsyncRAT** - AsyncRAT malware detection
+- **RAT_QuasarRAT** - QuasarRAT detection
+
+#### Ransomware
+- **Ransomware_Generic** - Generic ransomware behavior indicators
+- **Ransomware_WannaCry** - WannaCry ransomware detection
+- **Ransomware_Locky** - Locky ransomware detection
+
+#### Banking Trojans
+- **BankingTrojan_Zeus** - Zeus banking trojan
+- **BankingTrojan_Emotet** - Emotet detection
+
+#### Process Injection & Code Injection
+- **Process_Injection_Classic** - Classic process injection techniques
+- **Process_Hollowing** - Process hollowing detection
+- **APC_Injection** - APC queue injection
+- **Reflective_DLL_Injection** - Reflective DLL injection
+
+#### Keyloggers
+- **Keylogger_Hooks** - Keyboard hook-based keyloggers
+- **Keylogger_RawInput** - Raw input keyloggers
+
+#### Credential Theft
+- **Mimikatz** - Mimikatz credential dumping tool
+- **Credential_Dumping_LSASS** - LSASS memory dumping
+- **Browser_Password_Stealer** - Browser credential theft
+
+#### Persistence Mechanisms
+- **Persistence_Registry_Run** - Registry Run key persistence
+- **Persistence_Scheduled_Task** - Scheduled task persistence
+- **Persistence_Startup_Folder** - Startup folder persistence
+
+#### Network Activity
+- **Reverse_Shell** - Reverse shell indicators
+- **C2_Beaconing** - Command and control beaconing
+- **Suspicious_Network_APIs** - Suspicious network API usage
+
+#### Packers & Obfuscation
+- **UPX_Packer** - UPX packer detection
+- **VMProtect_Packer** - VMProtect packer detection
+- **Themida_Packer** - Themida/Winlicense packer detection
+- **High_Entropy_Section** - High entropy sections (encryption/packing)
+
+#### Anti-Analysis Techniques
+- **Anti_Debug_APIs** - Anti-debugging API usage
+- **Anti_VM** - Anti-VM detection techniques
+- **Anti_Sandbox** - Anti-sandbox techniques
+
+#### Cryptominers
+- **Cryptocurrency_Miner** - Cryptocurrency miner detection
+
+#### Downloaders & Droppers
+- **Downloader_Generic** - Generic downloader behavior
+
+#### Document Exploits
+- **Suspicious_Office_Macros** - Suspicious Office macro indicators
+- **PDF_Exploit** - Suspicious PDF with potential exploits
+
+#### Webshells
+- **Webshell_Generic_PHP** - Generic PHP webshell
+- **Webshell_Generic_ASPX** - Generic ASPX webshell
+
+#### Suspicious Patterns
+- **Suspicious_PowerShell** - Suspicious PowerShell command patterns
+- **Suspicious_Base64** - Large base64 encoded data (possible payload)
+- **Suspicious_URL_Patterns** - Suspicious URL patterns
 
 ### Custom Rules
 
@@ -361,14 +423,16 @@ python mal.py sample.exe  # Recreates DB
 
 This version includes critical production-ready improvements:
 
- **Memory-efficient string extraction** - Streaming with chunk overlap (handles multi-GB files)  
- **Safe SQLite operations** - WAL mode, proper UPSERT, context managers  
- **YARA match sanitization** - Prevents DB bloat, safe encoding  
- **Exponential backoff** - Cuckoo polling with timeout/error handling  
- **IOC normalization** - Domain/IP validation, private IP filtering  
- **Robust PE parsing** - Safe timestamp handling, entropy calculation  
- **Logging infrastructure** - Structured logging with verbosity control  
- **JSON export** - SIEM integration support  
+✅ **Memory-efficient string extraction** - Streaming with chunk overlap (handles multi-GB files)  
+✅ **Safe SQLite operations** - WAL mode, proper UPSERT, context managers  
+✅ **YARA match sanitization** - Prevents DB bloat, safe encoding  
+✅ **Exponential backoff** - Cuckoo polling with timeout/error handling  
+✅ **IOC normalization** - Domain/IP validation, private IP filtering  
+✅ **Robust PE parsing** - Safe timestamp handling, entropy calculation  
+✅ **Logging infrastructure** - Structured logging with verbosity control  
+✅ **JSON export** - SIEM integration support  
+✅ **Comprehensive YARA rules** - 40+ rules covering major malware families and techniques  
+✅ **Advanced threat detection** - RATs, ransomware, banking trojans, keyloggers, and more  
 
 See [IMPROVEMENTS.md](IMPROVEMENTS.md) for technical details.
 
@@ -388,7 +452,15 @@ See [IMPROVEMENTS.md](IMPROVEMENTS.md) for technical details.
 
 ## Roadmap
 
-### v2.1 (Next Release)
+### v2.1 (Current Release) ✅
+- [x] Advanced YARA ruleset with 40+ detection rules
+- [x] RAT detection (RevengeRAT, njRAT, AsyncRAT, QuasarRAT)
+- [x] Ransomware detection (WannaCry, Locky, generic indicators)
+- [x] Banking trojan detection (Zeus, Emotet)
+- [x] Process injection and code injection techniques
+- [x] Anti-analysis and evasion technique detection
+
+### v2.2 (Next Release)
 - [ ] Quarantine folder with automatic file copying
 - [ ] Config file support (YAML)
 - [ ] Plugin architecture for custom analyzers
@@ -485,6 +557,6 @@ For questions, issues, or security concerns:
 
 ---
 
-**Last Updated**: October 26, 2025  
-**Version**: 2.0  
-**Status**: Production-Ready
+**Last Updated**: November 2, 2025  
+**Version**: 2.1  
+**Status**: Production-Ready with Advanced Detection
