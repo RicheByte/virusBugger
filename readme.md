@@ -30,10 +30,19 @@ A comprehensive, self-contained malware analysis tool for static and dynamic ana
 
 ### Intelligence & Reporting
  **Risk Scoring** - Weighted algorithm (0-100 scale)  
- **Markdown Reports** - Human-readable analysis summaries  
+ **Comprehensive Reports** - Detailed markdown with executive summary, complete PE analysis, YARA metadata, IOCs, strings, and dynamic results  
+ **CLI Command Logging** - Reproducible analysis with command tracking  
  **JSON Export** - Machine-readable for SIEM/automation  
  **SQLite Database** - Historical analysis, IOC correlation  
  **No External APIs** - Completely local/offline operation  
+
+### Advanced Features
+ **Fuzzy Hashing** - ssdeep and TLSH for similarity analysis (optional)  
+ **Import Hash (imphash)** - Malware family pivoting  
+ **Enhanced File Detection** - python-magic support with fallback  
+ **Flexible YARA Loading** - Single file, directory, or comma-separated list  
+ **Overlay Detection** - Identifies appended data  
+ **Code Signature Check** - Authenticode presence detection  
 
 ---
 

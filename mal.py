@@ -1658,7 +1658,7 @@ def calculate_risk_score(analysis_results):
 # REPORT GENERATION
 # ============================================================================
 
-def generate_report(sample_data, analysis_results, output_dir="reports"):
+def generate_report(sample_data, analysis_results, output_dir="reports", cli_command=None):
     """Generate comprehensive analysis report"""
     os.makedirs(output_dir, exist_ok=True)
     
@@ -1669,7 +1669,69 @@ def generate_report(sample_data, analysis_results, output_dir="reports"):
     with open(report_file, 'w', encoding='utf-8') as f:
         f.write(f"# Malware Analysis Report\n\n")
         f.write(f"**Generated:** {datetime.now().isoformat()}\n\n")
+        
+        # CLI command used
+        if cli_command:
+            f.write(f"**Command:** `{cli_command}`\n\n")
+        
         f.write(f"---\n\n")
+        
+        # Executive Summary
+        f.write(f"## Executive Summary\n\n")
+        risk_score = analysis_results.get('risk_score', 0)
+        yara_matches = analysis_results.get('yara', [])
+        
+        # Threat classification
+        threat_level = "🟢 LOW RISK"
+        if risk_score >= 75:
+            threat_level = "🔴 CRITICAL THREAT"
+        elif risk_score >= 50:
+            threat_level = "🟡 MEDIUM THREAT"
+        
+        f.write(f"**Threat Level:** {threat_level} (Risk Score: {risk_score}/100)\n\n")
+        
+        # Key findings
+        f.write(f"**Key Findings:**\n\n")
+        if yara_matches:
+            families = set()
+            techniques = set()
+            for match in yara_matches:
+                meta = match.get('meta', {})
+                if meta.get('malware_family'):
+                    families.add(meta['malware_family'])
+                if meta.get('technique'):
+                    techniques.add(meta['technique'])
+                if meta.get('category'):
+                    techniques.add(meta['category'])
+            
+            if families:
+                f.write(f"- **Malware Families Detected:** {', '.join(sorted(families))}\n")
+            if techniques:
+                f.write(f"- **Techniques/Categories:** {', '.join(sorted(techniques))}\n")
+            f.write(f"- **YARA Detections:** {len(yara_matches)} rule(s) matched\n")
+        
+        pe = analysis_results.get('pe_analysis', {})
+        if pe and not isinstance(pe, dict) or pe.get('error'):
+            f.write(f"- **File Type:** Non-PE or analysis failed\n")
+        elif pe:
+            if pe.get('suspicious_flags'):
+                f.write(f"- **Suspicious Behaviors:** {len(pe['suspicious_flags'])} flag(s)\n")
+            if pe.get('is_signed'):
+                f.write(f"- **Code Signature:** Present (not validated)\n")
+            if pe.get('overlay_size', 0) > 0:
+                f.write(f"- **Overlay Data:** {pe['overlay_size']} bytes appended\n")
+        
+        iocs = analysis_results.get('iocs', {})
+        if iocs:
+            total_iocs = sum(len(v) for k, v in iocs.items() if isinstance(v, list))
+            if total_iocs > 0:
+                f.write(f"- **IOCs Extracted:** {total_iocs} indicator(s)\n")
+        
+        cuckoo_iocs = analysis_results.get('cuckoo_iocs')
+        if cuckoo_iocs:
+            f.write(f"- **Dynamic Analysis:** Completed via Cuckoo Sandbox\n")
+        
+        f.write(f"\n---\n\n")
         
         # Sample metadata
         f.write(f"## Sample Metadata\n\n")
@@ -1697,20 +1759,45 @@ def generate_report(sample_data, analysis_results, output_dir="reports"):
         if 'yara' in analysis_results and isinstance(analysis_results['yara'], list) and analysis_results['yara']:
             f.write(f"## YARA Detections\n\n")
             for match in analysis_results['yara']:
-                severity = match.get('meta', {}).get('severity', 'unknown')
-                f.write(f"### 🔴 {match['rule']} (Severity: {severity})\n\n")
-                if 'meta' in match and match['meta']:
-                    f.write(f"**Description:** {match['meta'].get('description', 'N/A')}\n\n")
+                meta = match.get('meta', {})
+                severity = meta.get('severity', 'unknown')
+                severity_icon = "🔴" if severity == "critical" else "🟠" if severity == "high" else "🟡" if severity == "medium" else "🔵"
+                
+                f.write(f"### {severity_icon} {match['rule']}\n\n")
+                
+                # Metadata table
+                f.write(f"| Property | Value |\n")
+                f.write(f"|----------|-------|\n")
+                f.write(f"| **Severity** | {severity.upper()} |\n")
+                if meta.get('description'):
+                    f.write(f"| **Description** | {meta['description']} |\n")
+                if meta.get('malware_family'):
+                    f.write(f"| **Malware Family** | {meta['malware_family']} |\n")
+                if meta.get('technique'):
+                    f.write(f"| **Technique** | {meta['technique']} |\n")
+                if meta.get('category'):
+                    f.write(f"| **Category** | {meta['category']} |\n")
+                if meta.get('tool'):
+                    f.write(f"| **Tool** | {meta['tool']} |\n")
+                if meta.get('packer'):
+                    f.write(f"| **Packer** | {meta['packer']} |\n")
+                if match.get('namespace'):
+                    f.write(f"| **Namespace** | {match['namespace']} |\n")
+                if match.get('tags'):
+                    f.write(f"| **Tags** | {', '.join(match['tags'])} |\n")
+                f.write(f"\n")
+                
                 if match.get('strings'):
                     f.write(f"**Matched Strings:** {len(match['strings'])}\n\n")
-                    # Show a few examples with offsets
-                    f.write("Top strings:\n\n")
+                    # Show examples with offsets
                     shown = 0
                     for ident, off, s in match['strings']:
-                        f.write(f"- {ident} @ 0x{off:X}: `{s[:80]}`\n")
+                        f.write(f"- `{ident}` @ offset 0x{off:X}: `{s[:80]}`\n")
                         shown += 1
                         if shown >= 5:
                             break
+                    if len(match['strings']) > 5:
+                        f.write(f"\n*...and {len(match['strings']) - 5} more match(es)*\n")
                     f.write("\n")
         
         # IOCs
@@ -1742,6 +1829,14 @@ def generate_report(sample_data, analysis_results, output_dir="reports"):
                     f.write(f"\n*...and {len(iocs['domains']) - 20} more*\n")
                 f.write(f"\n")
             
+            if iocs.get('emails'):
+                f.write(f"### Email Addresses ({len(iocs['emails'])})\n\n")
+                for email in iocs['emails'][:15]:
+                    f.write(f"- `{email}`\n")
+                if len(iocs['emails']) > 15:
+                    f.write(f"\n*...and {len(iocs['emails']) - 15} more*\n")
+                f.write(f"\n")
+            
             if iocs.get('registry_keys'):
                 f.write(f"### Registry Keys ({len(iocs['registry_keys'])})\n\n")
                 for key in iocs['registry_keys'][:15]:
@@ -1749,37 +1844,187 @@ def generate_report(sample_data, analysis_results, output_dir="reports"):
                 if len(iocs['registry_keys']) > 15:
                     f.write(f"\n*...and {len(iocs['registry_keys']) - 15} more*\n")
                 f.write(f"\n")
+            
+            if iocs.get('file_paths'):
+                f.write(f"### File Paths ({len(iocs['file_paths'])})\n\n")
+                for path in iocs['file_paths'][:15]:
+                    f.write(f"- `{path}`\n")
+                if len(iocs['file_paths']) > 15:
+                    f.write(f"\n*...and {len(iocs['file_paths']) - 15} more*\n")
+                f.write(f"\n")
+        
+        # String Analysis
+        if 'strings' in analysis_results:
+            strings_data = analysis_results['strings']
+            f.write(f"## String Analysis\n\n")
+            f.write(f"**Total Extracted:**\n")
+            f.write(f"- ASCII Strings: {strings_data.get('total_ascii', 0)}\n")
+            f.write(f"- Unicode Strings: {strings_data.get('total_unicode', 0)}\n\n")
+            
+            # Show interesting string samples
+            ascii_strs = strings_data.get('ascii', [])
+            unicode_strs = strings_data.get('unicode', [])
+            
+            if ascii_strs:
+                f.write(f"**Sample ASCII Strings:**\n\n")
+                for s in ascii_strs[:15]:
+                    if len(s) > 8:  # Only show interesting ones
+                        f.write(f"- `{s[:100]}`\n")
+                f.write(f"\n")
+            
+            if unicode_strs:
+                f.write(f"**Sample Unicode Strings:**\n\n")
+                for s in unicode_strs[:10]:
+                    if len(s) > 8:
+                        f.write(f"- `{s[:100]}`\n")
+                f.write(f"\n")
         
         # PE Analysis
         if 'pe_analysis' in analysis_results and isinstance(analysis_results['pe_analysis'], dict):
             pe = analysis_results['pe_analysis']
             f.write(f"## PE File Analysis\n\n")
             
-            if 'timestamp' in pe:
-                f.write(f"**Compile Time:** {pe['timestamp']}\n\n")
+            # PE Header Info
+            f.write(f"### PE Header Information\n\n")
+            f.write(f"| Property | Value |\n")
+            f.write(f"|----------|-------|\n")
+            if pe.get('machine') is not None:
+                machine_name = {0x14c: 'i386', 0x8664: 'x64', 0x1c0: 'ARM', 0xaa64: 'ARM64'}.get(pe['machine'], f"0x{pe['machine']:X}")
+                f.write(f"| **Machine Type** | {machine_name} |\n")
+            if pe.get('timestamp'):
+                f.write(f"| **Compile Time** | {pe['timestamp']} |\n")
+            if pe.get('subsystem') is not None:
+                subsys_name = {2: 'GUI', 3: 'Console', 1: 'Native'}.get(pe['subsystem'], f"{pe['subsystem']}")
+                f.write(f"| **Subsystem** | {subsys_name} |\n")
+            if pe.get('entry_point'):
+                f.write(f"| **Entry Point** | {pe['entry_point']} |\n")
+            if pe.get('image_base'):
+                f.write(f"| **Image Base** | {pe['image_base']} |\n")
+            if pe.get('imphash'):
+                f.write(f"| **Import Hash** | `{pe['imphash']}` |\n")
+            if pe.get('is_signed') is not None:
+                sig_status = "✓ Signed" if pe['is_signed'] else "✗ Not Signed"
+                f.write(f"| **Code Signature** | {sig_status} |\n")
+            if pe.get('overlay_size', 0) > 0:
+                f.write(f"| **Overlay Size** | {pe['overlay_size']:,} bytes |\n")
+            if pe.get('characteristics') is not None:
+                f.write(f"| **Characteristics** | 0x{pe['characteristics']:X} |\n")
+            if pe.get('dll_characteristics') is not None:
+                f.write(f"| **DLL Characteristics** | 0x{pe['dll_characteristics']:X} |\n")
+            f.write(f"\n")
             
             if pe.get('suspicious_flags'):
-                f.write(f"### ⚠️ Suspicious Flags\n\n")
+                f.write(f"### ⚠️ Suspicious Indicators ({len(pe['suspicious_flags'])})\n\n")
                 for flag in pe['suspicious_flags']:
                     f.write(f"- {flag}\n")
                 f.write(f"\n")
             
             if pe.get('sections'):
-                f.write(f"### Sections\n\n")
-                f.write(f"| Name | Virtual Size | Raw Size | Entropy |\n")
-                f.write(f"|------|-------------|----------|----------|\n")
+                f.write(f"### Sections ({len(pe['sections'])})\n\n")
+                f.write(f"| Name | Virtual Addr | Virtual Size | Raw Size | Entropy | Characteristics |\n")
+                f.write(f"|------|-------------|--------------|----------|---------|------------------|\n")
                 for sec in pe['sections']:
                     entropy = sec.get('entropy', 0)
                     entropy_str = f"**{entropy:.2f}**" if entropy > 7.0 else f"{entropy:.2f}"
-                    f.write(f"| {sec['name']} | {sec['virtual_size']} | {sec['raw_size']} | {entropy_str} |\n")
+                    chars = sec.get('characteristics', 0)
+                    f.write(f"| {sec['name']} | {sec['virtual_address']} | {sec['virtual_size']:,} | {sec['raw_size']:,} | {entropy_str} | 0x{chars:X} |\n")
                 f.write(f"\n")
             
             if pe.get('imports'):
                 f.write(f"### Imported DLLs ({len(pe['imports'])})\n\n")
-                for imp in pe['imports'][:10]:
-                    f.write(f"- **{imp['dll']}** ({len(imp['functions'])} functions)\n")
-                if len(pe['imports']) > 10:
-                    f.write(f"\n*...and {len(pe['imports']) - 10} more DLLs*\n")
+                # Show top imports
+                for imp in pe['imports'][:15]:
+                    f.write(f"#### {imp['dll']}\n\n")
+                    funcs = imp['functions']
+                    if funcs:
+                        # Show first 10 functions
+                        for func in funcs[:10]:
+                            f.write(f"- `{func}`\n")
+                        if len(funcs) > 10:
+                            f.write(f"\n*...and {len(funcs) - 10} more function(s)*\n")
+                    f.write(f"\n")
+                if len(pe['imports']) > 15:
+                    f.write(f"\n*...and {len(pe['imports']) - 15} more DLL(s)*\n\n")
+            
+            if pe.get('exports'):
+                f.write(f"### Exported Functions ({len(pe['exports'])})\n\n")
+                for exp in pe['exports'][:20]:
+                    f.write(f"- `{exp.get('name', 'N/A')}` (Ordinal: {exp.get('ordinal', 'N/A')}, Address: {exp.get('address', 'N/A')})\n")
+                if len(pe['exports']) > 20:
+                    f.write(f"\n*...and {len(pe['exports']) - 20} more export(s)*\n")
+                f.write(f"\n")
+            
+            if pe.get('resources'):
+                f.write(f"### Resources ({len(pe['resources'])})\n\n")
+                f.write(f"| Type | ID | Language | Size |\n")
+                f.write(f"|------|----|---------:|------|\n")
+                for res in pe['resources'][:20]:
+                    f.write(f"| {res.get('type', 'N/A')} | {res.get('id', 'N/A')} | {res.get('lang', 'N/A')} | {res.get('size', 0):,} |\n")
+                if len(pe['resources']) > 20:
+                    f.write(f"\n*...and {len(pe['resources']) - 20} more resource(s)*\n")
+                f.write(f"\n")
+        
+        # Cuckoo Sandbox Results
+        if 'cuckoo_iocs' in analysis_results:
+            cuckoo = analysis_results['cuckoo_iocs']
+            f.write(f"## Dynamic Analysis (Cuckoo Sandbox)\n\n")
+            
+            if cuckoo.get('processes'):
+                f.write(f"### Processes Created ({len(cuckoo['processes'])})\n\n")
+                f.write(f"| Process Name | PID | Parent PID |\n")
+                f.write(f"|--------------|-----|------------|\n")
+                for proc in cuckoo['processes'][:20]:
+                    f.write(f"| {proc.get('name', 'N/A')} | {proc.get('pid', 'N/A')} | {proc.get('parent_id', 'N/A')} |\n")
+                if len(cuckoo['processes']) > 20:
+                    f.write(f"\n*...and {len(cuckoo['processes']) - 20} more process(es)*\n")
+                f.write(f"\n")
+            
+            if cuckoo.get('mutexes') and len(cuckoo['mutexes']) > 0:
+                f.write(f"### Mutexes ({len(cuckoo['mutexes'])})\n\n")
+                for mutex in cuckoo['mutexes'][:15]:
+                    f.write(f"- `{mutex}`\n")
+                if len(cuckoo['mutexes']) > 15:
+                    f.write(f"\n*...and {len(cuckoo['mutexes']) - 15} more*\n")
+                f.write(f"\n")
+            
+            if cuckoo.get('files') and len(cuckoo['files']) > 0:
+                f.write(f"### Dropped Files ({len(cuckoo['files'])})\n\n")
+                for fil in cuckoo['files'][:15]:
+                    f.write(f"- `{fil}`\n")
+                if len(cuckoo['files']) > 15:
+                    f.write(f"\n*...and {len(cuckoo['files']) - 15} more*\n")
+                f.write(f"\n")
+            
+            if cuckoo.get('registry') and len(cuckoo['registry']) > 0:
+                f.write(f"### Registry Keys Accessed ({len(cuckoo['registry'])})\n\n")
+                for reg in cuckoo['registry'][:15]:
+                    f.write(f"- `{reg}`\n")
+                if len(cuckoo['registry']) > 15:
+                    f.write(f"\n*...and {len(cuckoo['registry']) - 15} more*\n")
+                f.write(f"\n")
+            
+            if cuckoo.get('domains') and len(cuckoo['domains']) > 0:
+                f.write(f"### Network - Domains Contacted ({len(cuckoo['domains'])})\n\n")
+                for dom in cuckoo['domains'][:20]:
+                    f.write(f"- `{dom}`\n")
+                if len(cuckoo['domains']) > 20:
+                    f.write(f"\n*...and {len(cuckoo['domains']) - 20} more*\n")
+                f.write(f"\n")
+            
+            if cuckoo.get('ips') and len(cuckoo['ips']) > 0:
+                f.write(f"### Network - IP Addresses ({len(cuckoo['ips'])})\n\n")
+                for ip in cuckoo['ips'][:20]:
+                    f.write(f"- `{ip}`\n")
+                if len(cuckoo['ips']) > 20:
+                    f.write(f"\n*...and {len(cuckoo['ips']) - 20} more*\n")
+                f.write(f"\n")
+            
+            if cuckoo.get('urls') and len(cuckoo['urls']) > 0:
+                f.write(f"### Network - URLs Accessed ({len(cuckoo['urls'])})\n\n")
+                for url in cuckoo['urls'][:20]:
+                    f.write(f"- `{url}`\n")
+                if len(cuckoo['urls']) > 20:
+                    f.write(f"\n*...and {len(cuckoo['urls']) - 20} more*\n")
                 f.write(f"\n")
         
         # Recommendations
@@ -1815,7 +2060,7 @@ def generate_report(sample_data, analysis_results, output_dir="reports"):
 # MAIN ANALYSIS WORKFLOW
 # ============================================================================
 
-def analyze_sample(file_path, cuckoo_url=None, yara_rules=None, save_to_db=True, output_dir="reports"):
+def analyze_sample(file_path, cuckoo_url=None, yara_rules=None, save_to_db=True, output_dir="reports", cli_command=None):
     """Main analysis workflow - orchestrates all analysis steps"""
     
     logger.info(f"\n{'='*70}")
@@ -1952,7 +2197,7 @@ def analyze_sample(file_path, cuckoo_url=None, yara_rules=None, save_to_db=True,
     
     # Step 8: Generate report
     logger.info(f"\n[*] Step 8: Generating report...")
-    report_file = generate_report(sample_data, analysis_results, output_dir)
+    report_file = generate_report(sample_data, analysis_results, output_dir, cli_command)
     logger.info(f"    Report saved: {report_file}")
     
     # Save full analysis to DB
@@ -2014,13 +2259,17 @@ NETWORK WARNING:
         logger.error(f"File not found: {args.file}")
         sys.exit(1)
     
+    # Reconstruct CLI command for report
+    cli_command = ' '.join(sys.argv)
+    
     # Run analysis
     result = analyze_sample(
         file_path=args.file,
         cuckoo_url=args.cuckoo,
         yara_rules=args.yara,
         save_to_db=not args.no_db,
-        output_dir=args.output
+        output_dir=args.output,
+        cli_command=cli_command
     )
     
     if result:
