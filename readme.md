@@ -81,7 +81,7 @@ A comprehensive, self-contained malware analysis tool for static and dynamic ana
  **Overlay Detection** - Identifies appended data  
  **Code Signature Check** - Authenticode presence detection  
 
-[how it works](/assets/diagram.png)
+![how it works](/assets/diagram.png)
 
 ---
 
@@ -119,69 +119,6 @@ python mal.py malware.exe --json results.json --verbose
 
 ### Output
 
-```
-======================================================================
-MALWARE ANALYSIS TRIAGE TOOL
-======================================================================
-
-[INFO] Step 1: Computing hashes and metadata...
-    MD5:    5d41402abc4b2a76b9719d911017c592
-    SHA256: 2c26b46b68ffc68ff99b453c1d30414134...
-    Type:   PE/DOS Executable
-
-[INFO] Step 2: Extracting strings (streaming mode)...
-    ASCII strings: 847
-    Unicode strings: 132
-
-[INFO] Step 3: Extracting IOCs from strings...
-    urls: 5
-    ips: 3
-    domains: 7
-    registry_keys: 12
-
-[INFO] Step 4: Analyzing PE structure...
-    Sections: 5
-    Imports: 3
-    Suspicious flags: 2
-      - High entropy in section .rsrc: 7.92
-      - Suspicious import: KERNEL32.dll!VirtualAllocEx
-
-[INFO] Step 5: Running YARA rules...
-    Matches: 5
-      - RAT_RevengeRAT (severity: critical)
-      - Process_Injection_Classic (severity: critical)
-      - Suspicious_Network_APIs (severity: high)
-      - Suspicious_Base64 (severity: medium)
-      - Suspicious_URL_Patterns (severity: medium)
-
-[INFO] Step 7: Calculating risk score...
-    Risk Score: 85/100
-    Assessment: 🔴 HIGH RISK
-
-[INFO] Step 8: Generating report...
-    Report saved: reports/report_5d41402abc4b2a76b9719d911017c592_20251026_143022.md
-
-======================================================================
-ANALYSIS COMPLETE
-======================================================================
-```
-
----
-
-## Documentation
-
-### Core Documentation
-- **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Installation, configuration, testing
-- **[WORKFLOW_GUIDE.md](WORKFLOW_GUIDE.md)** - Step-by-step analysis workflow
-- **[EXAMPLES.md](EXAMPLES.md)** - Real-world usage scenarios
-- **[IMPROVEMENTS.md](IMPROVEMENTS.md)** - Technical implementation details
-
-### Quick Links
-- [Safety Procedures](#safety-procedures)
-- [Command-Line Options](#command-line-options)
-- [Database Schema](#database-schema)
-- [YARA Rules](#yara-rules)
-- [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -283,6 +220,10 @@ shred -vfz -n 10 malware.exe
 #### `reports`
 - Full analysis JSON for historical queries
 - Linked to `samples` via `sample_md5`
+
+
+![Cli Output](/assets/output-cli.png)
+
 
 ### Example Queries
 
@@ -482,7 +423,6 @@ This version includes critical production-ready improvements:
 ✅ **Comprehensive YARA rules** - 40+ rules covering major malware families and techniques  
 ✅ **Advanced threat detection** - RATs, ransomware, banking trojans, keyloggers, and more  
 
-See [IMPROVEMENTS.md](IMPROVEMENTS.md) for technical details.
 
 ---
 
