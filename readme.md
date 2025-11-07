@@ -4,6 +4,9 @@ A comprehensive, self-contained malware analysis tool for static and dynamic ana
 
 ## 🚀 What's New - Ninja Edition
 
+
+![Demo Video](/assets/video.gif)
+
 ### 🎯 **100+ Advanced YARA Rules**
 - **RAT Detection**: RevengeRAT, DarkComet, NanoCore, Remcos, njRAT, AsyncRAT, QuasarRAT
 - **Ransomware Families**: WannaCry, Locky, Ryuk, Maze, Sodinokibi/REvil, Conti, LockBit, DarkSide
@@ -77,6 +80,8 @@ A comprehensive, self-contained malware analysis tool for static and dynamic ana
  **Flexible YARA Loading** - Single file, directory, or comma-separated list  
  **Overlay Detection** - Identifies appended data  
  **Code Signature Check** - Authenticode presence detection  
+
+[how it works](/assets/diagram.png)
 
 ---
 
