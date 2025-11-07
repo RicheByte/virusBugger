@@ -1,6 +1,40 @@
-# Malware Analysis Triage Tool (MAL)
+# Malware Analysis Triage Tool (MAL) - Industry-Grade Ninja Edition 🥷
 
-A comprehensive, self-contained malware analysis tool for static and dynamic analysis **without relying on external APIs**. Built for defensive security operations, incident response, and malware research.
+A comprehensive, self-contained malware analysis tool for static and dynamic analysis **without relying on external APIs**. Built for defensive security operations, incident response, and malware research with **industry-level detection capabilities**.
+
+## 🚀 What's New - Ninja Edition
+
+### 🎯 **100+ Advanced YARA Rules**
+- **RAT Detection**: RevengeRAT, DarkComet, NanoCore, Remcos, njRAT, AsyncRAT, QuasarRAT
+- **Ransomware Families**: WannaCry, Locky, Ryuk, Maze, Sodinokibi/REvil, Conti, LockBit, DarkSide
+- **Banking Trojans**: Zeus, Emotet, Dridex, TrickBot, Zloader, Gozi/ISFB, Carbanak
+- **APT & Espionage**: Cobalt Strike, Metasploit, Mimikatz, Empire, Lazarus Group, Fancy Bear, Cozy Bear
+- **Information Stealers**: AgentTesla, Formbook, Raccoon, Vidar, LokiBot, Azorult, RedLine, StealC
+- **Advanced Techniques**: Process Doppelganging, AtomBombing, Thread Hijacking, VDSO Hijacking
+- **Packers**: UPX, VMProtect, Themida, Enigma, ASPack, PECompact, Armadillo, ConfuserEx
+- **Anti-Analysis**: Advanced debugging detection, VM evasion, sandbox detection, memory scanning
+
+### 🧠 **Behavioral Pattern Analysis**
+- Automatic detection of ransomware, RAT, stealer, and backdoor indicators
+- Pattern matching across ASCII and Unicode strings
+- Context-aware behavioral classification
+
+### 🔗 **API Call Sequence Detection**
+- **10+ Malicious Patterns**: Process injection, hollowing, keylogging, credential dumping
+- **Advanced Techniques**: Data exfiltration, privilege escalation, lateral movement
+- **Confidence Scoring**: Percentage-based matching with severity levels
+
+### 🌐 **Network IOC Enrichment**
+- **Suspicious TLD Detection**: Identifies commonly abused free domains (.tk, .ml, .ga, etc.)
+- **DGA Detection**: Recognizes Domain Generation Algorithm patterns
+- **Port Analysis**: Flags suspicious ports (Metasploit, IRC C2, backdoors)
+- **URL Analysis**: Detects direct IPs, executable downloads, base64 encoding
+
+### 📊 **Advanced Threat Intelligence Scoring**
+- **Detailed Score Breakdown**: See exactly what contributes to the risk score
+- **Weighted Factors**: YARA matches, API sequences, behavioral patterns
+- **Actionable Recommendations**: Specific guidance based on threat level
+- **Multi-Level Assessment**: CRITICAL, HIGH, MEDIUM, LOW, MINIMAL
 
 ##  CRITICAL SAFETY WARNING
 

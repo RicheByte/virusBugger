@@ -1,13 +1,17 @@
 # Malware Analysis Tool - Python Dependencies
 # Install with: pip install -r requirements.txt
 
-# Core dependencies
+# Core dependencies (REQUIRED)
 pefile>=2023.2.7        # PE file parsing and analysis
-yara-python>=4.3.1      # YARA rule scanning
+yara-python>=4.5.0      # YARA rule scanning (industry-grade detection)
 requests>=2.31.0        # HTTP client for Cuckoo integration
 
-# Optional but recommended
+# Optional but HIGHLY recommended
 python-magic>=0.4.27    # Better file type detection (requires libmagic)
+                        # Windows: pip install python-magic-bin
+                        # Linux: apt-get install libmagic1
+                        # macOS: brew install libmagic
+
 ssdeep>=3.4             # Fuzzy hashing for similarity analysis
 tlsh>=4.5.0             # TLSH fuzzy hashing (optional)
 
@@ -15,3 +19,8 @@ tlsh>=4.5.0             # TLSH fuzzy hashing (optional)
 pytest>=7.4.0           # Unit testing framework
 black>=23.7.0           # Code formatter
 pylint>=2.17.5          # Code linter
+
+# Platform-specific notes:
+# - On Windows, python-magic requires DLLs: pip install python-magic-bin
+# - On Linux/macOS, ensure system libmagic is installed
+# - ssdeep may require build tools on some systems

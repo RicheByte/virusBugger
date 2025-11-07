@@ -84,6 +84,271 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
+# ADVANCED BEHAVIORAL PATTERN ANALYSIS
+# ============================================================================
+
+class BehavioralAnalyzer:
+    """Analyzes behavioral patterns in malware"""
+    
+    def __init__(self):
+        self.patterns = {
+            'ransomware_indicators': [
+                r'\.encrypted', r'\.locked', r'\.crypto',
+                r'README.*\.txt', r'DECRYPT.*\.txt',
+                r'bitcoin', r'ransom', r'payment',
+            ],
+            'rat_indicators': [
+                r'keylog', r'screenshot', r'webcam',
+                r'reverse.*shell', r'remote.*control', r'cmd.*execute',
+            ],
+            'stealer_indicators': [
+                r'password', r'cookie', r'credential',
+                r'wallet', r'autofill', r'login.*data',
+            ],
+            'backdoor_indicators': [
+                r'persistence', r'startup', r'registry.*run',
+                r'scheduled.*task', r'service.*install',
+            ],
+        }
+    
+    def analyze(self, strings: List[str]) -> Dict[str, List[str]]:
+        """Analyze strings for behavioral patterns"""
+        results = defaultdict(list)
+        for category, patterns in self.patterns.items():
+            for pattern in patterns:
+                regex = re.compile(pattern, re.IGNORECASE)
+                for string in strings:
+                    if regex.search(string) and string not in results[category]:
+                        results[category].append(string[:100])
+        return dict(results)
+
+
+# ============================================================================
+# API CALL SEQUENCE ANALYSIS
+# ============================================================================
+
+class APISequenceAnalyzer:
+    """Detects malicious API call sequences"""
+    
+    SUSPICIOUS_SEQUENCES = [
+        {'name': 'Process Injection', 'severity': 'critical',
+         'apis': ['OpenProcess', 'VirtualAllocEx', 'WriteProcessMemory', 'CreateRemoteThread'], 'min_match': 4},
+        {'name': 'Process Hollowing', 'severity': 'critical',
+         'apis': ['CreateProcess', 'NtUnmapViewOfSection', 'VirtualAllocEx', 'WriteProcessMemory', 'ResumeThread'], 'min_match': 4},
+        {'name': 'Keylogging', 'severity': 'high',
+         'apis': ['SetWindowsHookEx', 'GetAsyncKeyState', 'GetForegroundWindow', 'GetWindowText'], 'min_match': 2},
+        {'name': 'Credential Dumping', 'severity': 'critical',
+         'apis': ['LsaEnumerateLogonSessions', 'LsaGetLogonSessionData', 'CryptUnprotectData'], 'min_match': 2},
+        {'name': 'Data Exfiltration', 'severity': 'high',
+         'apis': ['InternetOpen', 'HttpSendRequest', 'InternetReadFile', 'WriteFile'], 'min_match': 3},
+        {'name': 'Anti-Debugging', 'severity': 'medium',
+         'apis': ['IsDebuggerPresent', 'CheckRemoteDebuggerPresent', 'NtQueryInformationProcess'], 'min_match': 2},
+        {'name': 'File Encryption', 'severity': 'critical',
+         'apis': ['FindFirstFile', 'CryptAcquireContext', 'CryptGenKey', 'CryptEncrypt', 'WriteFile'], 'min_match': 4},
+        {'name': 'Privilege Escalation', 'severity': 'critical',
+         'apis': ['OpenProcessToken', 'LookupPrivilegeValue', 'AdjustTokenPrivileges'], 'min_match': 3},
+        {'name': 'Lateral Movement', 'severity': 'critical',
+         'apis': ['NetShareEnum', 'NetShareGetInfo', 'WNetAddConnection2', 'CreateProcess'], 'min_match': 3},
+        {'name': 'Service Manipulation', 'severity': 'high',
+         'apis': ['OpenSCManager', 'CreateService', 'StartService', 'DeleteService'], 'min_match': 2},
+    ]
+    
+    def analyze(self, imports: List[Dict]) -> List[Dict]:
+        """Analyze imports for suspicious API sequences"""
+        results = []
+        all_apis = []
+        for dll_import in imports:
+            all_apis.extend(dll_import.get('functions', []))
+        
+        for sequence in self.SUSPICIOUS_SEQUENCES:
+            matched = [api for api in sequence['apis'] if api in all_apis]
+            if len(matched) >= sequence['min_match']:
+                results.append({
+                    'name': sequence['name'],
+                    'severity': sequence['severity'],
+                    'matched_apis': matched,
+                    'confidence': len(matched) / len(sequence['apis']) * 100
+                })
+        return results
+
+
+# ============================================================================
+# NETWORK IOC ENRICHMENT
+# ============================================================================
+
+class NetworkIOCEnricher:
+    """Enriches network IOCs with threat intelligence"""
+    
+    KNOWN_MALICIOUS_TLDS = {'.tk', '.ml', '.ga', '.cf', '.gq', '.top', '.xyz', '.win', '.bid'}
+    SUSPICIOUS_PORTS = {4444: 'Metasploit', 5555: 'ADB', 6667: 'IRC C2', 8443: 'Alt HTTPS', 9999: 'Backdoor', 31337: 'Elite'}
+    DGA_INDICATORS = [r'[a-z]{20,}', r'[0-9]{5,}']
+    
+    @staticmethod
+    def analyze_domain(domain: str) -> Dict:
+        """Analyze domain for suspicious characteristics"""
+        result = {'domain': domain, 'suspicious': False, 'reasons': []}
+        
+        for tld in NetworkIOCEnricher.KNOWN_MALICIOUS_TLDS:
+            if domain.endswith(tld):
+                result['suspicious'] = True
+                result['reasons'].append(f'Suspicious TLD: {tld}')
+        
+        for pattern in NetworkIOCEnricher.DGA_INDICATORS:
+            if re.search(pattern, domain):
+                result['suspicious'] = True
+                result['reasons'].append('Possible DGA')
+                break
+        
+        if len(domain) > 5 and len(set(domain)) / len(domain) > 0.7:
+            result['suspicious'] = True
+            result['reasons'].append('High entropy (DGA)')
+        
+        return result
+    
+    @staticmethod
+    def analyze_url(url: str) -> Dict:
+        """Analyze URL for suspicious characteristics"""
+        result = {'url': url, 'suspicious': False, 'reasons': []}
+        
+        if re.match(r'https?://\d+\.\d+\.\d+\.\d+', url):
+            result['suspicious'] = True
+            result['reasons'].append('Direct IP')
+        
+        port_match = re.search(r':(\d+)/', url)
+        if port_match:
+            port = int(port_match.group(1))
+            if port in NetworkIOCEnricher.SUSPICIOUS_PORTS:
+                result['suspicious'] = True
+                result['reasons'].append(f'Port {port} ({NetworkIOCEnricher.SUSPICIOUS_PORTS[port]})')
+        
+        if re.search(r'\.(exe|dll|bat|ps1|vbs|scr)($|\?)', url, re.IGNORECASE):
+            result['suspicious'] = True
+            result['reasons'].append('Executable download')
+        
+        return result
+
+
+# ============================================================================
+# THREAT INTELLIGENCE SCORER
+# ============================================================================
+
+class ThreatIntelligenceScorer:
+    """Advanced risk scoring with detailed breakdown"""
+    
+    WEIGHTS = {
+        'yara_critical': 25,
+        'yara_high': 15,
+        'yara_medium': 10,
+        'yara_low': 5,
+        'suspicious_api_sequence': 20,
+        'packer_detected': 10,
+        'high_entropy': 15,
+        'network_iocs': 15,
+        'ransomware_indicators': 25,
+        'rat_indicators': 20,
+        'stealer_indicators': 18,
+        'backdoor_indicators': 15,
+        'apt_indicators': 25,
+        'pe_suspicious_flags': 20,
+    }
+    
+    @staticmethod
+    def calculate_detailed_score(analysis_data: Dict) -> Dict:
+        """Calculate detailed risk score with breakdown"""
+        score_breakdown = {}
+        total_score = 0
+        max_score = 100
+
+        base_score = analysis_data.get('risk_score', 0)
+
+        if 'yara' in analysis_data and isinstance(analysis_data['yara'], list):
+            severity_counts = defaultdict(int)
+            for match in analysis_data['yara']:
+                severity = match.get('meta', {}).get('severity', 'low')
+                severity_counts[severity] += 1
+
+            for severity, count in severity_counts.items():
+                key = f'yara_{severity}'
+                if key in ThreatIntelligenceScorer.WEIGHTS:
+                    points = min(
+                        ThreatIntelligenceScorer.WEIGHTS[key] * count,
+                        ThreatIntelligenceScorer.WEIGHTS[key] * 2,
+                    )
+                    score_breakdown[f'YARA_{severity.upper()}'] = points
+                    total_score += points
+
+        if 'api_sequences' in analysis_data:
+            seq_score = len(analysis_data['api_sequences']) * ThreatIntelligenceScorer.WEIGHTS['suspicious_api_sequence']
+            seq_score = min(seq_score, 40)
+            score_breakdown['Suspicious_APIs'] = seq_score
+            total_score += seq_score
+
+        if 'behavioral_patterns' in analysis_data:
+            patterns = analysis_data['behavioral_patterns']
+            for pattern_type in ['ransomware_indicators', 'rat_indicators', 'stealer_indicators', 'backdoor_indicators']:
+                if pattern_type in patterns and patterns[pattern_type]:
+                    weight = ThreatIntelligenceScorer.WEIGHTS.get(pattern_type, 0)
+                    if weight:
+                        score_breakdown[pattern_type.replace('_', ' ').title()] = weight
+                        total_score += weight
+
+        pe = analysis_data.get('pe_analysis')
+        if isinstance(pe, dict):
+            flags = pe.get('suspicious_flags', []) or []
+            if flags:
+                flag_weight = min(len(flags) * 5, ThreatIntelligenceScorer.WEIGHTS['pe_suspicious_flags'])
+                score_breakdown['PE Suspicious Flags'] = flag_weight
+                total_score += flag_weight
+
+                overlay_size = pe.get('overlay_size', 0)
+                if overlay_size > 1_000_000:
+                    score_breakdown['Large Overlay Payload'] = 20
+                    total_score += 20
+                elif overlay_size > 100_000:
+                    score_breakdown['Overlay Payload'] = 10
+                    total_score += 10
+
+        enriched = analysis_data.get('enriched_iocs') or {}
+        if enriched:
+            suspicious_domains = [d for d in enriched.get('domains', []) if d.get('suspicious')]
+            suspicious_urls = [u for u in enriched.get('urls', []) if u.get('suspicious')]
+            if suspicious_domains:
+                domain_score = min(len(suspicious_domains) * 3, ThreatIntelligenceScorer.WEIGHTS['network_iocs'])
+                score_breakdown['Suspicious Domains'] = domain_score
+                total_score += domain_score
+            if suspicious_urls:
+                url_score = min(len(suspicious_urls) * 3, ThreatIntelligenceScorer.WEIGHTS['network_iocs'])
+                score_breakdown['Suspicious URLs'] = url_score
+                total_score += url_score
+
+        total_score = max(total_score, base_score)
+        total_score = min(total_score, max_score)
+
+        return {
+            'total_score': total_score,
+            'breakdown': score_breakdown,
+            'threat_level': ThreatIntelligenceScorer.get_threat_level(total_score),
+            'recommendation': ThreatIntelligenceScorer.get_recommendation(total_score),
+        }
+    
+    @staticmethod
+    def get_threat_level(score: int) -> str:
+        if score >= 80: return "🔴 CRITICAL - Confirmed Malicious"
+        elif score >= 60: return "🟠 HIGH - Highly Suspicious"
+        elif score >= 40: return "🟡 MEDIUM - Suspicious Activity"
+        elif score >= 20: return "🔵 LOW - Potentially Unwanted"
+        else: return "🟢 MINIMAL - Likely Benign"
+    
+    @staticmethod
+    def get_recommendation(score: int) -> str:
+        if score >= 80: return "IMMEDIATE ACTION: Isolate system, block IOCs, initiate incident response"
+        elif score >= 60: return "High priority investigation. Sandbox analysis recommended."
+        elif score >= 40: return "Further analysis recommended. Monitor for suspicious behavior."
+        elif score >= 20: return "Low priority. Review logs and context."
+        else: return "Likely safe, maintain standard security posture."
+
+
+# ============================================================================
 # DATABASE SETUP
 # ============================================================================
 
@@ -776,19 +1041,22 @@ def run_yara_scan(file_path, rules_path=None):
 
 
 def run_default_yara_rules(file_path):
-    """Run embedded YARA rules"""
+    """Run embedded YARA rules - Industry-grade detection suite"""
     if not HAS_YARA:
         return {"error": "yara-python not installed"}
     
-    # Comprehensive YARA rules for malware analysis
+    # ============================================================================
+    # COMPREHENSIVE YARA RULES - INDUSTRY-GRADE MALWARE DETECTION
+    # ============================================================================
     default_rules = """
-    // ==================== RAT (Remote Access Trojan) Detection ====================
+    // ==================== ADVANCED RAT (Remote Access Trojan) Detection ====================
     
     rule RAT_RevengeRAT {
         meta:
             description = "Detects RevengeRAT malware"
             severity = "critical"
             malware_family = "RevengeRAT"
+            reference = "https://malpedia.caad.fkie.fraunhofer.de/details/win.revengeRAT"
         strings:
             $s1 = "RevengeRAT" nocase
             $s2 = "Revenge-RAT" nocase
@@ -797,8 +1065,56 @@ def run_default_yara_rules(file_path):
             $cmd2 = "LimeLogger" ascii
             $net1 = "socketio" nocase
             $net2 = "get_Pass" ascii
+            $pdb = /PDB.*Revenge/i
         condition:
-            any of ($s*) or 2 of ($cmd*, $net*)
+            any of ($s*) or 2 of ($cmd*, $net*) or $pdb
+    }
+    
+    rule RAT_DarkComet {
+        meta:
+            description = "Detects DarkComet RAT"
+            severity = "critical"
+            malware_family = "DarkComet"
+            reference = "DarkComet RAT builder artifacts"
+        strings:
+            $s1 = "#BOT#" ascii
+            $s2 = "DARKCOMET" ascii nocase
+            $s3 = "DC_MUTEX" ascii
+            $cmd = "DOWNLOAD&EXECUTE" ascii
+            $config = "GENCODE" ascii
+            $net = "BEGIN_DOWNLOAD" ascii
+        condition:
+            2 of them
+    }
+    
+    rule RAT_NanoCore {
+        meta:
+            description = "Detects NanoCore RAT"
+            severity = "critical"
+            malware_family = "NanoCore"
+        strings:
+            $s1 = "NanoCore" ascii
+            $s2 = "Nano.Core" ascii
+            $class1 = "IClientNetworkHost" ascii
+            $class2 = "ClientPlugin" ascii
+            $mutex = "Mutex.OpenExisting" ascii
+        condition:
+            any of ($s*) or 2 of ($class*, $mutex)
+    }
+    
+    rule RAT_RemcosRAT {
+        meta:
+            description = "Detects Remcos RAT"
+            severity = "critical"
+            malware_family = "Remcos"
+        strings:
+            $s1 = "Remcos" ascii nocase
+            $s2 = "Breaking-Security" ascii
+            $mutex = "Remcos_Mutex" ascii
+            $cmd1 = "get_AudioFolder" ascii
+            $cmd2 = "screenshot.txt" ascii
+        condition:
+            any of ($s*) or ($mutex and any of ($cmd*))
     }
     
     rule RAT_njRAT {
@@ -900,6 +1216,104 @@ def run_default_yara_rules(file_path):
             any of them
     }
     
+    rule Ransomware_Ryuk {
+        meta:
+            description = "Detects Ryuk ransomware"
+            severity = "critical"
+            malware_family = "Ryuk"
+            reference = "High-profile targeted ransomware"
+        strings:
+            $ext = ".ryk" ascii
+            $ext2 = ".RYK" ascii
+            $note1 = "RyukReadMe.txt" ascii
+            $ransom = "No system is safe" ascii
+            $bitcoin = "bitcoin" nocase
+            $api1 = "CryptAcquireContextW" ascii
+            $api2 = "CryptGenRandom" ascii
+        condition:
+            any of ($ext*) or ($note1 and ($bitcoin or 2 of ($api*)))
+    }
+    
+    rule Ransomware_Maze {
+        meta:
+            description = "Detects Maze ransomware"
+            severity = "critical"
+            malware_family = "Maze"
+        strings:
+            $s1 = "DECRYPT-FILES.txt" ascii
+            $s2 = "maze" nocase
+            $url = "mazedecrypt" nocase
+            $threat = "leaked and exposed" nocase
+        condition:
+            2 of them
+    }
+    
+    rule Ransomware_Sodinokibi_REvil {
+        meta:
+            description = "Detects Sodinokibi/REvil ransomware"
+            severity = "critical"
+            malware_family = "Sodinokibi"
+            aka = "REvil"
+        strings:
+            $cfg1 = "exp" ascii
+            $cfg2 = "pk" ascii
+            $cfg3 = "pid" ascii
+            $cfg4 = "sub" ascii
+            $cfg5 = "dbg" ascii
+            $note = "readme.txt" nocase
+            $ext1 = ".locked" ascii
+            $ext2 = ".encrypted" ascii
+        condition:
+            4 of ($cfg*) or ($note and any of ($ext*))
+    }
+    
+    rule Ransomware_Conti {
+        meta:
+            description = "Detects Conti ransomware"
+            severity = "critical"
+            malware_family = "Conti"
+        strings:
+            $s1 = "CONTI" ascii
+            $s2 = "All of your files are currently encrypted" ascii
+            $readme = "readme.txt" nocase
+            $api1 = "NetShareEnum" ascii
+            $api2 = "NetShareGetInfo" ascii
+        condition:
+            any of ($s*) or ($readme and 2 of ($api*))
+    }
+    
+    rule Ransomware_LockBit {
+        meta:
+            description = "Detects LockBit ransomware"
+            severity = "critical"
+            malware_family = "LockBit"
+        strings:
+            $s1 = "LockBit" nocase
+            $note = "Restore-My-Files.txt" ascii
+            $ext = ".lockbit" ascii
+            $api1 = "GetLogicalDrives" ascii
+            $api2 = "FindFirstFileW" ascii
+        condition:
+            any of ($s*) or ($note and $ext) or (2 of ($api*) and $note)
+    }
+    
+    rule Ransomware_DarkSide {
+        meta:
+            description = "Detects DarkSide ransomware"
+            severity = "critical"
+            malware_family = "DarkSide"
+            reference = "Colonial Pipeline attack"
+        strings:
+            $s1 = "darkside" nocase
+            $note1 = "README" ascii
+            $note2 = "---BEGIN DARKSIDE" ascii
+            $avoid1 = "Armenia" ascii
+            $avoid2 = "Azerbaijan" ascii
+            $avoid3 = "Belarus" ascii
+        condition:
+            ($s1 and any of ($note*)) or (any of ($note*) and 2 of ($avoid*))
+    }
+    
     // ==================== Banking Trojans ====================
     
     rule BankingTrojan_Zeus {
@@ -931,7 +1345,335 @@ def run_default_yara_rules(file_path):
             all of ($code*) or all of ($api*)
     }
     
-    // ==================== Process Injection & Code Injection ====================
+    rule BankingTrojan_Dridex {
+        meta:
+            description = "Detects Dridex banking trojan"
+            severity = "critical"
+            malware_family = "Dridex"
+        strings:
+            $s1 = "system32\\config\\systemprofile" ascii
+            $s2 = "DRIDEX" ascii
+            $api1 = "HttpSendRequestW" ascii
+            $api2 = "InternetReadFile" ascii
+            $inject = "WriteProcessMemory" ascii
+        condition:
+            ($s1 and $inject) or ($s2 and 2 of ($api*))
+    }
+    
+    rule BankingTrojan_TrickBot {
+        meta:
+            description = "Detects TrickBot banking trojan"
+            severity = "critical"
+            malware_family = "TrickBot"
+        strings:
+            $module1 = "pwgrab" ascii
+            $module2 = "systeminfo" ascii
+            $module3 = "injectDll" ascii
+            $config = "<mcconf>" ascii
+            $str1 = "Start" ascii
+            $str2 = "Control" ascii
+        condition:
+            2 of ($module*) or ($config and 2 of ($str*))
+    }
+    
+    rule BankingTrojan_Zloader {
+        meta:
+            description = "Detects Zloader banking trojan"
+            severity = "critical"
+            malware_family = "Zloader"
+            aka = "Terdot, DELoader"
+        strings:
+            $s1 = "user_execute.dll" ascii
+            $s2 = "cmd /c start /b" ascii
+            $api1 = "HttpSendRequestA" ascii
+            $api2 = "InternetOpenA" ascii
+            $inject = "ZwWriteVirtualMemory" ascii
+        condition:
+            2 of ($s*) or ($inject and 2 of ($api*))
+    }
+    
+    rule BankingTrojan_Gozi_ISFB {
+        meta:
+            description = "Detects Gozi/ISFB/Ursnif banking trojan"
+            severity = "critical"
+            malware_family = "Gozi"
+            aka = "ISFB, Ursnif"
+        strings:
+            $s1 = "client_id" ascii
+            $s2 = "soft" ascii
+            $s3 = "version" ascii
+            $s4 = "user_execute" ascii
+            $hash = {6A 00 68 ?? ?? ?? ?? FF 15}
+        condition:
+            3 of ($s*) or $hash
+    }
+    
+    rule BankingTrojan_Carbanak {
+        meta:
+            description = "Detects Carbanak/Anunak banking trojan"
+            severity = "critical"
+            malware_family = "Carbanak"
+            reference = "APT targeting financial institutions"
+        strings:
+            $cmd1 = "getaccounts" ascii
+            $cmd2 = "checkav" ascii
+            $cmd3 = "netview" ascii
+            $plugin = "vnc.dll" ascii
+            $api = "GetActiveWindow" ascii
+        condition:
+            2 of ($cmd*) or ($plugin and $api)
+    }
+    
+    // ==================== APT & Espionage Malware ====================
+    
+    rule APT_Cobalt_Strike {
+        meta:
+            description = "Detects Cobalt Strike beacons"
+            severity = "critical"
+            tool = "Cobalt Strike"
+            category = "Post-Exploitation Framework"
+        strings:
+            $s1 = "beacon.dll" ascii nocase
+            $s2 = "ReflectiveLoader" ascii
+            $s3 = "beacon.x64.dll" ascii nocase
+            $s4 = "%s (admin)" ascii
+            $ua = "Mozilla/5.0 (Windows; U; MSIE" ascii
+            $pipe = "\\\\.\\pipe\\MSSE-" ascii
+        condition:
+            2 of them
+    }
+    
+    rule APT_Metasploit_Meterpreter {
+        meta:
+            description = "Detects Metasploit Meterpreter payloads"
+            severity = "high"
+            tool = "Metasploit"
+            category = "Post-Exploitation Framework"
+        strings:
+            $s1 = "meterpreter" nocase
+            $s2 = "ReflectiveLoader" ascii
+            $s3 = "stdapi_" ascii
+            $s4 = "priv_elevate_" ascii
+            $ext1 = ".dll" ascii
+            $func = "DllMain" ascii
+        condition:
+            any of ($s*) or (3 of them)
+    }
+    
+    rule APT_Mimikatz_Indicators {
+        meta:
+            description = "Advanced Mimikatz detection"
+            severity = "critical"
+            tool = "Mimikatz"
+            category = "Credential Dumping"
+        strings:
+            $s1 = "sekurlsa::logonpasswords" ascii nocase
+            $s2 = "lsadump::sam" ascii nocase
+            $s3 = "privilege::debug" ascii nocase
+            $s4 = "gentilkiwi" ascii nocase
+            $s5 = "mimikatz" ascii nocase
+            $func1 = "kuhl_m_" ascii
+            $func2 = "kull_m_" ascii
+            $api1 = "LsaCallAuthenticationPackage" ascii
+            $api2 = "SamEnumerateUsersInDomain" ascii
+        condition:
+            2 of ($s*) or 2 of ($func*) or (any of ($s*) and any of ($api*))
+    }
+    
+    rule APT_Empire_PowerShell {
+        meta:
+            description = "Detects PowerShell Empire framework"
+            severity = "high"
+            tool = "Empire"
+            category = "Post-Exploitation Framework"
+        strings:
+            $s1 = "Invoke-Empire" ascii nocase
+            $s2 = "Start-Negotiate" ascii
+            $s3 = "routing_packet" ascii
+            $s4 = "AgentResults" ascii
+            $empire = "empire" nocase
+        condition:
+            2 of them
+    }
+    
+    rule APT_Lazarus_Group {
+        meta:
+            description = "Detects Lazarus Group malware indicators"
+            severity = "critical"
+            threat_actor = "Lazarus Group"
+            aka = "Hidden Cobra, APT38"
+        strings:
+            $s1 = "D9AF5C08-196B-47C4-883D-3E730600E4D9" ascii
+            $s2 = "Global\\BPALPC" ascii
+            $s3 = "taskhostex.exe" ascii
+            $pe_timestamp = {60 72 5F 4E}
+            $mutex = "ServiceEntryPointThread" ascii
+        condition:
+            2 of them
+    }
+    
+    rule APT_FancyBear_Sofacy {
+        meta:
+            description = "Detects Fancy Bear/Sofacy/APT28 malware"
+            severity = "critical"
+            threat_actor = "Fancy Bear"
+            aka = "APT28, Sofacy, Sednit"
+        strings:
+            $s1 = "XTunnel" ascii
+            $s2 = "HIDEDRV" ascii
+            $s3 = "XAgent" ascii
+            $url = "advstoreshell.com" ascii
+            $url2 = "adobeair-updates.com" ascii
+        condition:
+            any of them
+    }
+    
+    rule APT_CozyBear_APT29 {
+        meta:
+            description = "Detects Cozy Bear/APT29 indicators"
+            severity = "critical"
+            threat_actor = "Cozy Bear"
+            aka = "APT29, The Dukes"
+        strings:
+            $s1 = "SeaDuke" ascii nocase
+            $s2 = "CloudDuke" ascii nocase
+            $s3 = "CosmicDuke" ascii nocase
+            $mutex = "Global\\{" ascii
+            $api = "WinHttpOpen" ascii
+        condition:
+            any of ($s*) or ($mutex and $api)
+    }
+    
+    // ==================== Information Stealers ====================
+    
+    rule InfoStealer_AgentTesla {
+        meta:
+            description = "Detects Agent Tesla information stealer"
+            severity = "high"
+            malware_family = "AgentTesla"
+        strings:
+            $s1 = "agent tesla" nocase
+            $s2 = "get_OSFullName" ascii
+            $s3 = "get_Clipboard" ascii
+            $smtp = "SmtpClient" ascii
+            $ftp = "FtpWebRequest" ascii
+            $screenshot = "CopyFromScreen" ascii
+        condition:
+            $s1 or (2 of ($s2, $s3, $smtp, $ftp, $screenshot))
+    }
+    
+    rule InfoStealer_Formbook {
+        meta:
+            description = "Detects Formbook information stealer"
+            severity = "high"
+            malware_family = "Formbook"
+            aka = "xLoader"
+        strings:
+            $inject1 = {8B 45 ?? 8B 4D ?? 8D 54 08 ?? 89 55 ??}
+            $inject2 = {33 C0 89 45 ?? 89 45 ?? C7 45}
+            $api1 = "NtUnmapViewOfSection" ascii
+            $api2 = "NtWriteVirtualMemory" ascii
+            $mutex = "XLOADERMutex" ascii
+        condition:
+            2 of ($inject*) or 2 of ($api*) or $mutex
+    }
+    
+    rule InfoStealer_Raccoon {
+        meta:
+            description = "Detects Raccoon Stealer"
+            severity = "high"
+            malware_family = "Raccoon"
+        strings:
+            $s1 = "Raccoon" ascii nocase
+            $s2 = "machineId" ascii
+            $s3 = "botnet" ascii
+            $api1 = "sqlite3_open" ascii
+            $api2 = "CryptUnprotectData" ascii
+            $telegram = "api.telegram.org" ascii nocase
+        condition:
+            ($s1 and any of ($s2, $s3)) or (2 of ($api*) and $telegram)
+    }
+    
+    rule InfoStealer_Vidar {
+        meta:
+            description = "Detects Vidar information stealer"
+            severity = "high"
+            malware_family = "Vidar"
+        strings:
+            $s1 = "Vidar" ascii nocase
+            $profile = "profile.txt" ascii
+            $screen = "screen.jpg" ascii
+            $api1 = "GetAdaptersInfo" ascii
+            $api2 = "GetVolumeInformationW" ascii
+        condition:
+            $s1 or (any of ($profile, $screen) and 2 of ($api*))
+    }
+    
+    rule InfoStealer_LokiBot {
+        meta:
+            description = "Detects Loki Bot information stealer"
+            severity = "high"
+            malware_family = "LokiBot"
+        strings:
+            $s1 = "Loki" ascii
+            $mutex = "3749282D" ascii
+            $api1 = "NtSetInformationThread" ascii
+            $api2 = "GetKeyboardState" ascii
+            $url = "kbfvzoboss" ascii
+        condition:
+            ($s1 and $mutex) or 2 of ($api*) or $url
+    }
+    
+    rule InfoStealer_AZORult_Advanced {
+        meta:
+            description = "Advanced Azorult stealer detection"
+            severity = "high"
+            malware_family = "Azorult"
+        strings:
+            $cfg = "config.dat" ascii
+            $url = "gate.php" ascii
+            $panel = "panel/login" ascii
+            $mutex = "Global\\{F4" ascii
+            $s1 = "azorult" ascii nocase
+            $s2 = "Passwords_" ascii
+            $s3 = "Autofill_" ascii
+        condition:
+            2 of ($cfg, $url, $panel, $s*) or ($mutex and any of ($cfg, $url))
+    }
+    
+    rule InfoStealer_RedLine_Advanced {
+        meta:
+            description = "Advanced RedLine stealer detection"
+            severity = "high"
+            malware_family = "RedLine"
+        strings:
+            $s1 = "RedLine" ascii
+            $s2 = "BrowserData" ascii
+            $s3 = "System.Management.Automation" ascii
+            $api1 = "CryptProtectData" ascii
+            $cfg = "TelegramBotToken" ascii
+            $path = "\\Local State" ascii
+        condition:
+            any of ($s*) or ($api1 and ($cfg or $path))
+    }
+    
+    rule InfoStealer_StealC {
+        meta:
+            description = "Detects StealC information stealer"
+            severity = "high"
+            malware_family = "StealC"
+            reference = "Vidar successor"
+        strings:
+            $s1 = "StealC" ascii nocase
+            $s2 = "sqlite_" ascii
+            $s3 = "Login Data" ascii wide
+            $s4 = "Web Data" ascii wide
+            $api = "CryptUnprotectData" ascii
+        condition:
+            ($s1 and any of ($s2, $s3, $s4)) or (2 of ($s2, $s3, $s4) and $api)
+    }
+    
+    // ==================== Advanced Process Injection & Code Injection ====================
     
     rule Process_Injection_Classic {
         meta:
@@ -990,6 +1732,63 @@ def run_default_yara_rules(file_path):
             $s4 = "VirtualAlloc" ascii
         condition:
             ($s1 and 2 of ($s2, $s3, $s4)) or all of ($s2, $s3, $s4)
+    }
+    
+    rule Process_Doppelganging {
+        meta:
+            description = "Process Doppelganging technique"
+            severity = "critical"
+            technique = "Process Doppelganging"
+            reference = "MITRE ATT&CK T1055.013"
+        strings:
+            $api1 = "NtCreateTransaction" ascii
+            $api2 = "NtCreateSection" ascii
+            $api3 = "NtRollbackTransaction" ascii
+            $api4 = "CreateProcessEx" ascii
+        condition:
+            3 of them
+    }
+    
+    rule Atom_Bombing {
+        meta:
+            description = "AtomBombing code injection technique"
+            severity = "critical"
+            technique = "AtomBombing"
+        strings:
+            $api1 = "GlobalAddAtom" ascii
+            $api2 = "NtQueueApcThread" ascii
+            $api3 = "GlobalGetAtomName" ascii
+        condition:
+            all of them
+    }
+    
+    rule Thread_Execution_Hijacking {
+        meta:
+            description = "Thread execution hijacking"
+            severity = "critical"
+            technique = "Thread Execution Hijacking"
+        strings:
+            $api1 = "CreateToolhelp32Snapshot" ascii
+            $api2 = "Thread32First" ascii
+            $api3 = "SuspendThread" ascii
+            $api4 = "SetThreadContext" ascii
+            $api5 = "ResumeThread" ascii
+        condition:
+            4 of them
+    }
+    
+    rule VDSO_Hijacking {
+        meta:
+            description = "VDSO hijacking (Linux)"
+            severity = "critical"
+            technique = "VDSO Hijacking"
+            platform = "Linux"
+        strings:
+            $s1 = "linux-vdso" ascii
+            $api1 = "ptrace" ascii
+            $api2 = "process_vm_writev" ascii
+        condition:
+            $s1 and any of ($api*)
     }
     
     // ==================== Keyloggers ====================
@@ -1203,6 +2002,84 @@ def run_default_yara_rules(file_path):
             any of them
     }
     
+    rule Enigma_Protector {
+        meta:
+            description = "Enigma Protector packer detected"
+            severity = "medium"
+            packer = "Enigma"
+        strings:
+            $s1 = ".enigma1" ascii
+            $s2 = ".enigma2" ascii
+            $s3 = "Enigma Protector" ascii
+        condition:
+            any of them
+    }
+    
+    rule ASPack_Packer {
+        meta:
+            description = "ASPack packer detected"
+            severity = "medium"
+            packer = "ASPack"
+        strings:
+            $s1 = "ASPack" ascii
+            $s2 = ".aspack" ascii
+            $s3 = ".adata" ascii
+        condition:
+            any of them
+    }
+    
+    rule PECompact_Packer {
+        meta:
+            description = "PECompact packer detected"
+            severity = "medium"
+            packer = "PECompact"
+        strings:
+            $s1 = "PECompact2" ascii
+            $s2 = "pec1" ascii
+            $s3 = "pec2" ascii
+        condition:
+            any of them
+    }
+    
+    rule Armadillo_Packer {
+        meta:
+            description = "Armadillo/Silicon Realms packer"
+            severity = "medium"
+            packer = "Armadillo"
+        strings:
+            $s1 = "Silicon Realms" ascii
+            $s2 = "Armadillo" ascii
+            $s3 = ".srt" ascii
+        condition:
+            any of them
+    }
+    
+    rule Dotfuscator {
+        meta:
+            description = "Dotfuscator .NET obfuscator"
+            severity = "low"
+            packer = "Dotfuscator"
+            platform = ".NET"
+        strings:
+            $s1 = "Dotfuscator" ascii
+            $s2 = "DotfuscatorAttribute" ascii
+        condition:
+            any of them
+    }
+    
+    rule ConfuserEx {
+        meta:
+            description = "ConfuserEx .NET obfuscator"
+            severity = "medium"
+            packer = "ConfuserEx"
+            platform = ".NET"
+        strings:
+            $s1 = "ConfuserEx" ascii
+            $s2 = "Confuser.Runtime" ascii
+        condition:
+            any of them
+    }
+    
     rule High_Entropy_Section {
         meta:
             description = "High entropy section (possible encryption/packing)"
@@ -1213,21 +2090,39 @@ def run_default_yara_rules(file_path):
             false
     }
     
-    // ==================== Anti-Analysis Techniques ====================
+    // ==================== Advanced Anti-Analysis Techniques ====================
     
     rule Anti_Debug_APIs {
         meta:
             description = "Anti-debugging API usage"
             severity = "high"
             technique = "Anti-Debugging"
+            reference = "MITRE ATT&CK T1622"
         strings:
             $api1 = "IsDebuggerPresent" ascii
             $api2 = "CheckRemoteDebuggerPresent" ascii
             $api3 = "NtQueryInformationProcess" ascii
             $api4 = "OutputDebugString" ascii
             $api5 = "DebugActiveProcess" ascii
+            $api6 = "NtSetInformationThread" ascii
+            $api7 = "ZwSetInformationThread" ascii
         condition:
             2 of them
+    }
+    
+    rule Anti_Debug_Advanced {
+        meta:
+            description = "Advanced anti-debugging techniques"
+            severity = "high"
+            technique = "Anti-Debugging"
+        strings:
+            $peb_check = {64 A1 30 00 00 00 8B 40 02 85 C0}
+            $heap_flags = {64 A1 30 00 00 00 8B 40 18 8B 40 10}
+            $api1 = "NtQuerySystemInformation" ascii
+            $api2 = "NtQueryObject" ascii
+            $timing = "QueryPerformanceCounter" ascii
+        condition:
+            any of ($peb_check, $heap_flags) or (2 of ($api*, $timing))
     }
     
     rule Anti_VM {
@@ -1421,6 +2316,237 @@ def run_default_yara_rules(file_path):
             $telegram = "api.telegram.org" ascii nocase
         condition:
             any of them
+    }
+
+    // ==================== Additional Threat Families ====================
+    
+    rule InfoStealer_Azorult {
+        meta:
+            description = "Detects Azorult information stealer"
+            severity = "high"
+            malware_family = "Azorult"
+        strings:
+            $cfg = "config.dat" ascii
+            $url = "gate.php" ascii
+            $panel = "panel/login" ascii
+            $mutex = "Global\\{F4" ascii
+            $panel2 = "azorult" ascii nocase
+        condition:
+            2 of ($cfg, $url, $panel, $panel2) or ($mutex and any of ($cfg, $url, $panel))
+    }
+
+    rule Trojan_QakBot {
+        meta:
+            description = "Detects QakBot/QBot banking trojan"
+            severity = "critical"
+            malware_family = "QakBot"
+        strings:
+            $str1 = "QBot" ascii
+            $str2 = "qakbot" ascii nocase
+            $path = "AppData\\Roaming\\Microsoft\\" ascii
+            $reg1 = "Software\\Microsoft\\Windows\\CurrentVersion\\Run" ascii
+            $task = "schtasks /create" ascii
+        condition:
+            (any of ($str*)) or ($path and ($reg1 or $task))
+    }
+
+    rule Loader_TrickBot {
+        meta:
+            description = "Detects TrickBot loader artifacts"
+            severity = "critical"
+            malware_family = "TrickBot"
+        strings:
+            $group = "client_id" ascii
+            $config = "sinj" ascii
+            $module = "megalon" ascii
+            $inject = "dpost" ascii
+            $mutex = "Global\\TbMutex" ascii
+        condition:
+            2 of ($group, $config, $module, $inject) or ($mutex and any of ($group, $module, $inject))
+    }
+
+    rule Ransomware_Cerber {
+        meta:
+            description = "Detects Cerber ransomware"
+            severity = "critical"
+            malware_family = "Cerber"
+        strings:
+            $ext1 = ".cerber" ascii
+            $ext2 = ".cerber2" ascii
+            $note1 = "_R_E_A_D___T_H_I_S_" ascii
+            $note2 = "@Please_Read_Me@.txt" ascii
+            $voice = "readme.hta" ascii
+        condition:
+            any of ($ext*) or 2 of ($note*, $voice)
+    }
+
+    rule Botnet_Mirai {
+        meta:
+            description = "Detects Mirai IoT botnet binaries"
+            severity = "high"
+            malware_family = "Mirai"
+        strings:
+            $str1 = "/bin/busybox" ascii
+            $str2 = "Mirai" ascii
+            $str3 = "/bin/echo -ne" ascii
+            $cmd = "table_init" ascii
+            $killed = "/proc/%d/stat" ascii
+        condition:
+            2 of ($str1, $str2, $str3, $cmd, $killed)
+    }
+
+    rule Stealer_RedLine {
+        meta:
+            description = "Detects RedLine stealer"
+            severity = "high"
+            malware_family = "RedLine"
+        strings:
+            $str1 = "RedLine" ascii
+            $str2 = "BrowserData" ascii
+            $api1 = "CryptProtectData" ascii
+            $ps = "System.Management.Automation" ascii
+            $cfg = "TelegramBotToken" ascii
+        condition:
+            any of ($str1, $str2) or (any of ($api1, $ps) and $cfg)
+    }
+
+    rule LateralMovement_SMBExec {
+        meta:
+            description = "Indicators of SMB exec style lateral movement"
+            severity = "high"
+            technique = "Lateral Movement"
+        strings:
+            $svc = "sc \\\\" ascii nocase
+            $copy = "copy \\\\" ascii nocase
+            $psexec = "psexec" ascii nocase
+            $wmic = "wmic /node:" ascii nocase
+            $creds = "cmdkey /add:" ascii nocase
+        condition:
+            ($svc and $copy) or ($psexec and $wmic) or ($wmic and $creds)
+    }
+    
+    // ==================== .NET Malware Detection ====================
+    
+    rule DotNet_Suspicious_Obfuscation {
+        meta:
+            description = "Suspicious .NET obfuscation patterns"
+            severity = "high"
+            platform = ".NET"
+        strings:
+            $mz = "MZ"
+            $net = "mscoree.dll" nocase
+            $obf1 = /[A-Z]{50,}/ ascii
+            $obf2 = /\\x00[a-z]\\x00[a-z]\\x00[a-z]\\x00[a-z]\\x00[a-z]\\x00/
+            $invoke = "System.Reflection.Assembly" ascii
+            $load = "Load" ascii
+        condition:
+            $mz at 0 and $net and ($obf1 or $obf2) and $invoke and $load
+    }
+    
+    rule DotNet_Malicious_Capabilities {
+        meta:
+            description = "Suspicious .NET capabilities combination"
+            severity = "high"
+            platform = ".NET"
+        strings:
+            $mz = "MZ"
+            $net = "mscoree.dll" nocase
+            $download = "System.Net.WebClient" ascii
+            $download2 = "DownloadFile" ascii
+            $download3 = "DownloadString" ascii
+            $exec1 = "Process.Start" ascii
+            $exec2 = "System.Diagnostics.Process" ascii
+            $persist1 = "Microsoft.Win32.Registry" ascii
+            $persist2 = "CurrentVersion\\Run" ascii
+        condition:
+            $mz at 0 and $net and 
+            (any of ($download*) and any of ($exec*)) or
+            (any of ($download*) and any of ($persist*))
+    }
+    
+    rule DotNet_RAT_Generic {
+        meta:
+            description = "Generic .NET RAT indicators"
+            severity = "critical"
+            platform = ".NET"
+        strings:
+            $mz = "MZ"
+            $net = "mscoree.dll" nocase
+            $socket = "System.Net.Sockets" ascii
+            $tcp = "TcpClient" ascii
+            $stream = "NetworkStream" ascii
+            $cmd1 = "cmd.exe" ascii
+            $cmd2 = "/c" ascii
+            $screenshot = "CopyFromScreen" ascii
+            $keylog = "GetAsyncKeyState" ascii
+        condition:
+            $mz at 0 and $net and $socket and $tcp and 
+            (any of ($cmd*) or $screenshot or $keylog)
+    }
+    
+    rule DotNet_Stealer_Credentials {
+        meta:
+            description = "Detects .NET credential stealing capabilities"
+            severity = "critical"
+            platform = ".NET"
+        strings:
+            $mz = "MZ"
+            $net = "mscoree.dll" nocase
+            $chrome = "Google\\Chrome\\User Data" ascii wide
+            $firefox = "Mozilla\\Firefox\\Profiles" ascii wide
+            $logindata = "Login Data" ascii wide
+            $cookies = "Cookies" ascii wide
+            $decrypt = "CryptUnprotectData" ascii
+            $sqlite = "sqlite" ascii nocase
+        condition:
+            $mz at 0 and $net and 
+            (any of ($chrome, $firefox) and any of ($logindata, $cookies)) and
+            ($decrypt or $sqlite)
+    }
+    
+    rule DotNet_Ransomware_Indicators {
+        meta:
+            description = "Detects .NET ransomware behavior"
+            severity = "critical"
+            platform = ".NET"
+        strings:
+            $mz = "MZ"
+            $net = "mscoree.dll" nocase
+            $crypto1 = "System.Security.Cryptography" ascii
+            $crypto2 = "AesManaged" ascii
+            $crypto3 = "RijndaelManaged" ascii
+            $file1 = "Directory.GetFiles" ascii
+            $file2 = "File.WriteAllBytes" ascii
+            $ext1 = ".encrypted" ascii
+            $ext2 = ".locked" ascii
+            $bitcoin = "bitcoin" ascii nocase
+            $ransom = "ransom" ascii nocase
+        condition:
+            $mz at 0 and $net and 
+            any of ($crypto*) and any of ($file*) and
+            (any of ($ext*) or any of ($bitcoin, $ransom))
+    }
+    
+    rule Suspicious_Large_Overlay {
+        meta:
+            description = "Detects files with large overlay data (possible embedded payload)"
+            severity = "medium"
+            category = "Suspicious Structure"
+        strings:
+            $mz = "MZ"
+        condition:
+            $mz at 0 and filesize > 1MB
+    }
+    
+    rule High_Entropy_Embedded_Data {
+        meta:
+            description = "High entropy suggests encrypted or compressed payload"
+            severity = "medium"
+            category = "Obfuscation"
+        strings:
+            $mz = "MZ"
+        condition:
+            $mz at 0 and filesize > 500KB
     }
     """
     
@@ -1619,37 +2745,53 @@ def calculate_risk_score(analysis_results):
     score = 0
     max_score = 100
     
-    # YARA matches
+    # YARA matches (heavily weighted)
     if 'yara' in analysis_results and isinstance(analysis_results['yara'], list):
         for match in analysis_results['yara']:
             severity = match.get('meta', {}).get('severity', 'medium')
             if severity == 'critical':
-                score += 20
+                score += 25  # Increased from 20
             elif severity == 'high':
-                score += 15
+                score += 18  # Increased from 15
             elif severity == 'medium':
-                score += 10
+                score += 12  # Increased from 10
             else:
-                score += 5
+                score += 6   # Increased from 5
     
     # PE suspicious flags
     if 'pe_analysis' in analysis_results:
         pe = analysis_results['pe_analysis']
         if isinstance(pe, dict) and 'suspicious_flags' in pe:
-            score += min(len(pe['suspicious_flags']) * 5, 20)
+            flags = pe['suspicious_flags']
+            score += min(len(flags) * 5, 20)
+            
+            # Large overlay is very suspicious
+            for flag in flags:
+                if 'Overlay data present' in flag:
+                    overlay_size = pe.get('overlay_size', 0)
+                    if overlay_size > 1000000:  # > 1MB
+                        score += 20  # Major red flag
+                    elif overlay_size > 100000:  # > 100KB
+                        score += 10
     
     # IOCs count
     if 'iocs' in analysis_results:
         iocs = analysis_results['iocs']
         score += min(len(iocs.get('urls', [])) * 3, 15)
         score += min(len(iocs.get('ips', [])) * 3, 15)
+        score += min(len(iocs.get('domains', [])) * 2, 15)  # Added domains
         score += min(len(iocs.get('registry_keys', [])) * 2, 10)
     
     # High entropy sections
     if 'pe_analysis' in analysis_results and isinstance(analysis_results['pe_analysis'], dict):
         sections = analysis_results['pe_analysis'].get('sections', [])
         high_entropy_count = sum(1 for s in sections if s.get('entropy', 0) > 7.0)
-        score += min(high_entropy_count * 5, 15)
+        score += min(high_entropy_count * 8, 20)  # Increased from 5 to 8
+    
+    # File size anomalies
+    file_size = analysis_results.get('sample', {}).get('size', 0)
+    if file_size > 10000000:  # Files > 10MB are unusual
+        score += 5
     
     return min(score, max_score)
 
@@ -2027,28 +3169,108 @@ def generate_report(sample_data, analysis_results, output_dir="reports", cli_com
                     f.write(f"\n*...and {len(cuckoo['urls']) - 20} more*\n")
                 f.write(f"\n")
         
+        # Advanced Analysis Results
+        if 'behavioral_patterns' in analysis_results or 'api_sequences' in analysis_results or 'enriched_iocs' in analysis_results:
+            f.write(f"## 🔬 Advanced Analysis\n\n")
+            
+            # Detailed scoring breakdown
+            if 'detailed_scoring' in analysis_results:
+                detailed = analysis_results['detailed_scoring']
+                f.write(f"### Threat Assessment\n\n")
+                f.write(f"**Threat Level:** {detailed['threat_level']}\n\n")
+                f.write(f"**Recommendation:** {detailed['recommendation']}\n\n")
+                
+                if detailed.get('breakdown'):
+                    f.write(f"**Score Breakdown:**\n\n")
+                    f.write(f"| Factor | Points |\n")
+                    f.write(f"|--------|--------|\n")
+                    for factor, score in detailed['breakdown'].items():
+                        f.write(f"| {factor} | +{score} |\n")
+                    f.write(f"| **TOTAL** | **{detailed['total_score']}/100** |\n\n")
+            
+            # Behavioral patterns
+            if 'behavioral_patterns' in analysis_results:
+                patterns = analysis_results['behavioral_patterns']
+                f.write(f"### Behavioral Indicators\n\n")
+                
+                for pattern_type, matches in patterns.items():
+                    if matches:
+                        icon = "🚨" if 'ransomware' in pattern_type or 'rat' in pattern_type else "⚠️"
+                        f.write(f"#### {icon} {pattern_type.replace('_', ' ').title()}\n\n")
+                        for match in matches[:10]:
+                            f.write(f"- `{match}`\n")
+                        if len(matches) > 10:
+                            f.write(f"\n*...and {len(matches) - 10} more*\n")
+                        f.write(f"\n")
+            
+            # API sequences
+            if 'api_sequences' in analysis_results:
+                sequences = analysis_results['api_sequences']
+                f.write(f"### Suspicious API Call Sequences\n\n")
+                
+                for seq in sequences:
+                    severity_icon = "🔴" if seq['severity'] == "critical" else "🟠" if seq['severity'] == "high" else "🟡"
+                    f.write(f"#### {severity_icon} {seq['name']}\n\n")
+                    f.write(f"- **Severity:** {seq['severity'].upper()}\n")
+                    f.write(f"- **Confidence:** {seq['confidence']:.0f}%\n")
+                    f.write(f"- **Matched APIs:** {', '.join(seq['matched_apis'])}\n\n")
+            
+            # Enriched IOCs
+            if 'enriched_iocs' in analysis_results:
+                enriched = analysis_results['enriched_iocs']
+                f.write(f"### Suspicious Network Indicators\n\n")
+                
+                if 'domains' in enriched and enriched['domains']:
+                    f.write(f"#### Suspicious Domains\n\n")
+                    for domain_info in enriched['domains'][:15]:
+                        f.write(f"- **{domain_info['domain']}**\n")
+                        for reason in domain_info['reasons']:
+                            f.write(f"  - ⚠️ {reason}\n")
+                    f.write(f"\n")
+                
+                if 'urls' in enriched and enriched['urls']:
+                    f.write(f"#### Suspicious URLs\n\n")
+                    for url_info in enriched['urls'][:15]:
+                        f.write(f"- **{url_info['url'][:80]}**\n")
+                        for reason in url_info['reasons']:
+                            f.write(f"  - ⚠️ {reason}\n")
+                    f.write(f"\n")
+        
         # Recommendations
         f.write(f"## Recommended Actions\n\n")
-        risk_score = analysis_results.get('risk_score', 0)
         
-        if risk_score >= 75:
+        # Use detailed scoring if available
+        if 'detailed_scoring' in analysis_results:
+            recommendation = analysis_results['detailed_scoring']['recommendation']
+            total_score = analysis_results['detailed_scoring']['total_score']
+        else:
+            total_score = analysis_results.get('risk_score', 0)
+            recommendation = None
+        
+        if total_score >= 75:
             f.write(f"### 🔴 HIGH RISK - IMMEDIATE ACTION REQUIRED\n\n")
             f.write(f"1. **Quarantine immediately** - Isolate affected systems\n")
             f.write(f"2. **Block all IOCs** - Add to firewall/IDS/IPS rules\n")
             f.write(f"3. **Hunt for additional infections** - Check for lateral movement\n")
             f.write(f"4. **Preserve evidence** - Create forensic images\n")
             f.write(f"5. **Incident response** - Escalate to security team\n\n")
-        elif risk_score >= 50:
+            if recommendation:
+                f.write(f"**Detailed Recommendation:** {recommendation}\n\n")
+        elif total_score >= 50:
             f.write(f"### 🟡 MEDIUM RISK - INVESTIGATION REQUIRED\n\n")
             f.write(f"1. **Contain** - Limit network access for affected systems\n")
             f.write(f"2. **Monitor** - Watch for suspicious activity\n")
             f.write(f"3. **Investigate** - Perform deeper analysis\n")
             f.write(f"4. **Block IOCs** - Add to monitoring systems\n\n")
+            if recommendation:
+                f.write(f"**Detailed Recommendation:** {recommendation}\n\n")
         else:
             f.write(f"### 🟢 LOW RISK - MONITORING RECOMMENDED\n\n")
             f.write(f"1. **Log** - Keep records of the sample\n")
             f.write(f"2. **Monitor** - Watch for related activity\n")
             f.write(f"3. **Update signatures** - Add to detection systems\n\n")
+            if recommendation:
+                f.write(f"**Detailed Recommendation:** {recommendation}\n\n")
         
         f.write(f"---\n\n")
         f.write(f"*Report generated by Malware Analysis Triage Tool*\n")
@@ -2182,12 +3404,95 @@ def analyze_sample(file_path, cuckoo_url=None, yara_rules=None, save_to_db=True,
     elif cuckoo_url and not HAS_REQUESTS:
         logger.warning(f"\n[*] Step 6: Skipping Cuckoo (requests not installed)")
     
-    # Step 7: Risk scoring
-    logger.info(f"\n[*] Step 7: Calculating risk score...")
+    # Step 6.5: Advanced behavioral and API analysis
+    logger.info(f"\n[*] Step 6.5: Running advanced analysis...")
+    
+    # Behavioral pattern analysis
+    if 'strings' in analysis_results:
+        logger.info(f"    Analyzing behavioral patterns...")
+        strings = []
+        string_sets = analysis_results.get('strings') or {}
+
+        for key in ('ascii', 'unicode'):
+            values = string_sets.get(key)
+            if isinstance(values, list):
+                strings.extend([s for s in values if isinstance(s, str)])
+            elif isinstance(values, str):
+                strings.append(values)
+
+        behavioral_analyzer = BehavioralAnalyzer()
+        behavioral_patterns = behavioral_analyzer.analyze(strings)
+
+        if behavioral_patterns:
+            analysis_results['behavioral_patterns'] = behavioral_patterns
+            for pattern_type, matches in behavioral_patterns.items():
+                if matches:
+                    logger.info(f"      {pattern_type}: {len(matches)} indicator(s)")
+    
+    # API sequence analysis
+    pe_info = analysis_results.get('pe_analysis')
+    if isinstance(pe_info, dict) and 'imports' in pe_info:
+        logger.info(f"    Analyzing API call sequences...")
+        api_analyzer = APISequenceAnalyzer()
+        imports_data = pe_info.get('imports')
+        imports_list = [entry for entry in imports_data if isinstance(entry, dict)] if isinstance(imports_data, list) else []
+        api_sequences = api_analyzer.analyze(imports_list)
+
+        if api_sequences:
+            analysis_results['api_sequences'] = api_sequences
+            for seq in api_sequences:
+                logger.info(f"      {seq['name']} ({seq['severity']}): {seq['confidence']:.0f}% confidence")
+    
+    # Network IOC enrichment
+    if 'iocs' in analysis_results:
+        logger.info(f"    Enriching network IOCs...")
+        enriched_iocs = {}
+        
+        if 'domains' in analysis_results['iocs'] and analysis_results['iocs']['domains']:
+            enricher = NetworkIOCEnricher()
+            enriched_domains = [enricher.analyze_domain(d) for d in analysis_results['iocs']['domains'][:20]]
+            suspicious_domains = [d for d in enriched_domains if d['suspicious']]
+            if suspicious_domains:
+                enriched_iocs['domains'] = suspicious_domains
+                logger.info(f"      Suspicious domains: {len(suspicious_domains)}")
+        
+        if 'urls' in analysis_results['iocs'] and analysis_results['iocs']['urls']:
+            enricher = NetworkIOCEnricher()
+            enriched_urls = [enricher.analyze_url(u) for u in analysis_results['iocs']['urls'][:20]]
+            suspicious_urls = [u for u in enriched_urls if u['suspicious']]
+            if suspicious_urls:
+                enriched_iocs['urls'] = suspicious_urls
+                logger.info(f"      Suspicious URLs: {len(suspicious_urls)}")
+        
+        if enriched_iocs:
+            analysis_results['enriched_iocs'] = enriched_iocs
+    
+    # Attach sample metadata for scoring/reporting reference
+    analysis_results['sample'] = sample_data
+
+    # Step 7: Advanced risk scoring with detailed breakdown
+    logger.info(f"\n[*] Step 7: Calculating advanced risk score...")
+    
+    # Original risk score
     risk_score = calculate_risk_score(analysis_results)
     analysis_results['risk_score'] = risk_score
-    logger.info(f"    Risk Score: {risk_score}/100")
     
+    # Detailed scoring with breakdown
+    scorer = ThreatIntelligenceScorer()
+    detailed_scoring = scorer.calculate_detailed_score(analysis_results)
+    analysis_results['detailed_scoring'] = detailed_scoring
+    
+    logger.info(f"    Risk Score: {detailed_scoring['total_score']}/100")
+    logger.info(f"    Threat Level: {detailed_scoring['threat_level']}")
+    
+    if detailed_scoring['breakdown']:
+        logger.info(f"    Score Breakdown:")
+        for factor, score in detailed_scoring['breakdown'].items():
+            logger.info(f"      {factor}: +{score}")
+    
+    logger.info(f"    Recommendation: {detailed_scoring['recommendation']}")
+    
+    # Legacy compatibility
     if risk_score >= 75:
         logger.warning(f"    Assessment: 🔴 HIGH RISK")
     elif risk_score >= 50:
