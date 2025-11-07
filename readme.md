@@ -2,12 +2,12 @@
 
 A comprehensive, self-contained malware analysis tool for static and dynamic analysis **without relying on external APIs**. Built for defensive security operations, incident response, and malware research with **industry-level detection capabilities**.
 
-## 🚀 What's New - Ninja Edition
+##  What's New - Ninja Edition
 
 
 ![Demo Video](/assets/video.gif)
 
-### 🎯 **100+ Advanced YARA Rules**
+###  **100+ Advanced YARA Rules**
 - **RAT Detection**: RevengeRAT, DarkComet, NanoCore, Remcos, njRAT, AsyncRAT, QuasarRAT
 - **Ransomware Families**: WannaCry, Locky, Ryuk, Maze, Sodinokibi/REvil, Conti, LockBit, DarkSide
 - **Banking Trojans**: Zeus, Emotet, Dridex, TrickBot, Zloader, Gozi/ISFB, Carbanak
@@ -17,23 +17,23 @@ A comprehensive, self-contained malware analysis tool for static and dynamic ana
 - **Packers**: UPX, VMProtect, Themida, Enigma, ASPack, PECompact, Armadillo, ConfuserEx
 - **Anti-Analysis**: Advanced debugging detection, VM evasion, sandbox detection, memory scanning
 
-### 🧠 **Behavioral Pattern Analysis**
+###  **Behavioral Pattern Analysis**
 - Automatic detection of ransomware, RAT, stealer, and backdoor indicators
 - Pattern matching across ASCII and Unicode strings
 - Context-aware behavioral classification
 
-### 🔗 **API Call Sequence Detection**
+###  **API Call Sequence Detection**
 - **10+ Malicious Patterns**: Process injection, hollowing, keylogging, credential dumping
 - **Advanced Techniques**: Data exfiltration, privilege escalation, lateral movement
 - **Confidence Scoring**: Percentage-based matching with severity levels
 
-### 🌐 **Network IOC Enrichment**
+###  **Network IOC Enrichment**
 - **Suspicious TLD Detection**: Identifies commonly abused free domains (.tk, .ml, .ga, etc.)
 - **DGA Detection**: Recognizes Domain Generation Algorithm patterns
 - **Port Analysis**: Flags suspicious ports (Metasploit, IRC C2, backdoors)
 - **URL Analysis**: Detects direct IPs, executable downloads, base64 encoding
 
-### 📊 **Advanced Threat Intelligence Scoring**
+###  **Advanced Threat Intelligence Scoring**
 - **Detailed Score Breakdown**: See exactly what contributes to the risk score
 - **Weighted Factors**: YARA matches, API sequences, behavioral patterns
 - **Actionable Recommendations**: Specific guidance based on threat level
@@ -412,16 +412,16 @@ python mal.py sample.exe  # Recreates DB
 
 This version includes critical production-ready improvements:
 
-✅ **Memory-efficient string extraction** - Streaming with chunk overlap (handles multi-GB files)  
-✅ **Safe SQLite operations** - WAL mode, proper UPSERT, context managers  
-✅ **YARA match sanitization** - Prevents DB bloat, safe encoding  
-✅ **Exponential backoff** - Cuckoo polling with timeout/error handling  
-✅ **IOC normalization** - Domain/IP validation, private IP filtering  
-✅ **Robust PE parsing** - Safe timestamp handling, entropy calculation  
-✅ **Logging infrastructure** - Structured logging with verbosity control  
-✅ **JSON export** - SIEM integration support  
-✅ **Comprehensive YARA rules** - 40+ rules covering major malware families and techniques  
-✅ **Advanced threat detection** - RATs, ransomware, banking trojans, keyloggers, and more  
+ **Memory-efficient string extraction** - Streaming with chunk overlap (handles multi-GB files)  
+ **Safe SQLite operations** - WAL mode, proper UPSERT, context managers  
+ **YARA match sanitization** - Prevents DB bloat, safe encoding  
+ **Exponential backoff** - Cuckoo polling with timeout/error handling  
+ **IOC normalization** - Domain/IP validation, private IP filtering  
+ **Robust PE parsing** - Safe timestamp handling, entropy calculation  
+ **Logging infrastructure** - Structured logging with verbosity control  
+ **JSON export** - SIEM integration support  
+ **Comprehensive YARA rules** - 40+ rules covering major malware families and techniques  
+ **Advanced threat detection** - RATs, ransomware, banking trojans, keyloggers, and more  
 
 
 ---
@@ -440,7 +440,7 @@ This version includes critical production-ready improvements:
 
 ## Roadmap
 
-### v2.1 (Current Release) ✅
+### v2.1 (Current Release) 
 - [x] Advanced YARA ruleset with 40+ detection rules
 - [x] RAT detection (RevengeRAT, njRAT, AsyncRAT, QuasarRAT)
 - [x] Ransomware detection (WannaCry, Locky, generic indicators)
@@ -481,33 +481,6 @@ Contributions welcome! Please:
 
 ---
 
-## License
-
-**MIT License**
-
-```
-Copyright (c) 2025 [Your Name]
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
----
 
 ## Disclaimer
 
@@ -533,18 +506,3 @@ Always:
 - **Cuckoo Sandbox** - Dynamic analysis platform
 - **Community rule authors** - YARA signature contributors
 
----
-
-## Contact
-
-For questions, issues, or security concerns:
-
-- GitHub Issues: [github.com/yourname/mal-analysis-tool/issues](https://github.com/yourname/mal-analysis-tool/issues)
-- Email: security@example.com
-- Security vulnerabilities: security-reports@example.com (PGP key available)
-
----
-
-**Last Updated**: November 2, 2025  
-**Version**: 2.1  
-**Status**: Production-Ready with Advanced Detection
